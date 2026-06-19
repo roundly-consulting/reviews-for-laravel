@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/*
+ * Publish this stub and rename the table below to the reviewable model's table
+ * (e.g. "products"). Run `php artisan migrate` to add the denormalized counters
+ * the MaintainsReviewAggregates trait keeps in sync. Re-publish per table that
+ * opts into cached aggregates.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('reviewable_table', function (Blueprint $table): void {
+            $table->unsignedInteger('reviews_count')->default(0);
+            $table->decimal('reviews_avg', 8, 4)->nullable();
+        });
+    }
+};
