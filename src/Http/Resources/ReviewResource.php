@@ -1,0 +1,52 @@
+<?php
+
+declare(strict_types=1);
+
+namespace RoundlyConsulting\Reviews\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+use RoundlyConsulting\Reviews\Models\Review;
+
+/**
+ * Public-facing JSON shape for a review. Publish it with the
+ * "reviews-resources" tag (or copy it) to customise the exposed fields.
+ *
+ * @mixin Review
+ */
+final class ReviewResource extends JsonResource
+{
+    /**
+     * @return array<string, mixed>
+     */
+    public function toArray(Request $request): array
+    {
+        /** @var Review $review */
+        $review = $this->resource;
+
+        return [
+            'id' => $review->id,
+            'parent_id' => $review->parent_id,
+            'rating' => $review->rating,
+            'status' => $review->status->value,
+            'verified' => $review->verified,
+            'title' => $review->title,
+            'content' => $review->content,
+            'helpful_count' => $review->helpful_count,
+            'unhelpful_count' => $review->unhelpful_count,
+            'helpful_score' => $review->helpfulScore(),
+            'author' => [
+                'type' => $review->author_type,
+                'id' => $review->author_id,
+            ],
+            'reviewable' => [
+                'type' => $review->reviewable_type,
+                'id' => $review->reviewable_id,
+            ],
+            'responses' => ReviewResource::collection($this->whenLoaded('responses')),
+            'created_at' => $review->created_at?->toIso8601String(),
+            'updated_at' => $review->updated_at?->toIso8601String(),
+            'approved_at' => $review->approved_at?->toIso8601String(),
+        ];
+    }
+}
