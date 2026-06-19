@@ -7,3 +7,7 @@ parameters:
         - src
         - database
         - config
+        - tests/Product.php
+        - tests/Member.php
+    configDirectories:
+        - config

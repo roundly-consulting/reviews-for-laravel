@@ -11,23 +11,29 @@ it('holds the review attributes', function (): void {
         reviewable: $reviewable = new Entity,
         content: 'Great!',
         title: 'Title',
+        rating: 5,
         meta: collect(['k' => 'v']),
+        approved: true,
     );
 
     expect($data->author)->toBe($author)
         ->and($data->reviewable)->toBe($reviewable)
         ->and($data->content)->toBe('Great!')
         ->and($data->title)->toBe('Title')
-        ->and($data->meta?->all())->toBe(['k' => 'v']);
+        ->and($data->rating)->toBe(5)
+        ->and($data->meta?->all())->toBe(['k' => 'v'])
+        ->and($data->approved)->toBeTrue();
 });
 
-it('defaults title and meta to null', function (): void {
+it('defaults optional fields', function (): void {
     $data = new CreateReviewData(
         author: new Entity,
         reviewable: new Entity,
-        content: 'Great!',
     );
 
-    expect($data->title)->toBeNull()
-        ->and($data->meta)->toBeNull();
+    expect($data->content)->toBeNull()
+        ->and($data->title)->toBeNull()
+        ->and($data->rating)->toBeNull()
+        ->and($data->meta)->toBeNull()
+        ->and($data->approved)->toBeFalse();
 });
