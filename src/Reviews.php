@@ -6,23 +6,45 @@ namespace RoundlyConsulting\Reviews;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Facade;
+use Illuminate\Support\Traits\Macroable;
 use RoundlyConsulting\Reviews\Actions\ApproveReview;
 use RoundlyConsulting\Reviews\Actions\DeleteReview;
 use RoundlyConsulting\Reviews\Actions\RejectReview;
+use RoundlyConsulting\Reviews\Actions\RemoveReviewVote;
+use RoundlyConsulting\Reviews\Actions\RespondToReview;
 use RoundlyConsulting\Reviews\Actions\UpdateReview;
+use RoundlyConsulting\Reviews\Actions\VoteOnReview;
 use RoundlyConsulting\Reviews\DataTransferObjects\RatingSummary;
 use RoundlyConsulting\Reviews\DataTransferObjects\UpdateReviewData;
 use RoundlyConsulting\Reviews\Models\Review;
+use RoundlyConsulting\Reviews\Models\ReviewVote;
 use RoundlyConsulting\Reviews\Support\PendingReview;
+use RoundlyConsulting\Reviews\Testing\ReviewsFake;
 
-final class Reviews
+class Reviews
 {
+    use Macroable;
+
     public function __construct(
-        private readonly ApproveReview $approveReview = new ApproveReview,
-        private readonly RejectReview $rejectReview = new RejectReview,
-        private readonly UpdateReview $updateReview = new UpdateReview,
-        private readonly DeleteReview $deleteReview = new DeleteReview,
+        protected readonly ApproveReview $approveReview = new ApproveReview,
+        protected readonly RejectReview $rejectReview = new RejectReview,
+        protected readonly UpdateReview $updateReview = new UpdateReview,
+        protected readonly DeleteReview $deleteReview = new DeleteReview,
+        protected readonly RespondToReview $respondToReview = new RespondToReview,
+        protected readonly VoteOnReview $voteOnReview = new VoteOnReview,
+        protected readonly RemoveReviewVote $removeReviewVote = new RemoveReviewVote,
     ) {}
+
+    public static function fake(): ReviewsFake
+    {
+        $fake = new ReviewsFake;
+
+        app()->instance(self::class, $fake);
+        Facade::clearResolvedInstance(self::class);
+
+        return $fake;
+    }
 
     public function for(Model $reviewable): PendingReview
     {
@@ -47,6 +69,21 @@ final class Reviews
     public function delete(Review $review): void
     {
         $this->deleteReview->execute($review);
+    }
+
+    public function respond(Review $review, Model $author, string $content, ?string $title = null): Review
+    {
+        return $this->respondToReview->execute($review, $author, $content, $title);
+    }
+
+    public function vote(Review $review, Model $voter, bool $helpful = true): ReviewVote
+    {
+        return $this->voteOnReview->execute($review, $voter, $helpful);
+    }
+
+    public function removeVote(Review $review, Model $voter): void
+    {
+        $this->removeReviewVote->execute($review, $voter);
     }
 
     public function averageFor(Model $reviewable): ?float
@@ -96,11 +133,11 @@ final class Reviews
     /**
      * @return Builder<Review>
      */
-    private function approvedQueryFor(Model $reviewable): Builder
+    protected function approvedQueryFor(Model $reviewable): Builder
     {
         /** @var class-string<Review> $model */
         $model = config('reviews.model', Review::class);
 
-        return $model::query()->approved()->for($reviewable);
+        return $model::query()->topLevel()->approved()->for($reviewable);
     }
 }
