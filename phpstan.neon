@@ -9,5 +9,8 @@ parameters:
         - config
         - tests/Product.php
         - tests/Member.php
+        - tests/Voter.php
+        - tests/Catalog.php
+        - tests/ReviewerHarness.php
     configDirectories:
         - config

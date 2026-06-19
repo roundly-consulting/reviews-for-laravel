@@ -37,5 +37,11 @@ abstract class TestCase extends Orchestra
         Schema::create('entities', function (Blueprint $table): void {
             $table->id();
         });
+
+        Schema::create('catalogs', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedInteger('reviews_count')->default(0);
+            $table->decimal('reviews_avg', 8, 4)->nullable();
+        });
     }
 }
