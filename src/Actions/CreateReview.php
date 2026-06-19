@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Reviews\Actions;
 
 use Carbon\CarbonImmutable;
+use RoundlyConsulting\Reviews\Contracts\ReviewModerator;
 use RoundlyConsulting\Reviews\DataTransferObjects\CreateReviewData;
 use RoundlyConsulting\Reviews\Enums\ReviewStatus;
 use RoundlyConsulting\Reviews\Events\ReviewCreated;
@@ -32,14 +33,15 @@ final class CreateReview
         $review->content = $data->content;
         $review->rating = $data->rating;
         $review->meta = $data->meta;
+        $review->verified = $data->verified;
 
-        $approved = $data->approved || (bool) config('reviews.auto_approve', false);
+        $forceApproved = $data->approved || (bool) config('reviews.auto_approve', false);
 
-        if ($approved) {
+        if ($forceApproved) {
             $review->status = ReviewStatus::Approved;
             $review->approved_at = CarbonImmutable::now();
         } else {
-            $review->status = $this->defaultStatus();
+            $this->applyModeration($review);
         }
 
         $review->author()->associate($data->author);
@@ -50,6 +52,32 @@ final class CreateReview
         ReviewCreated::dispatch($review);
 
         return $review;
+    }
+
+    private function applyModeration(Review $review): void
+    {
+        $outcome = app(ReviewModerator::class)->moderate($review);
+
+        if ($outcome->decision->isApprove()) {
+            $review->status = ReviewStatus::Approved;
+            $review->approved_at = CarbonImmutable::now();
+
+            return;
+        }
+
+        if ($outcome->decision->isReject()) {
+            $review->status = ReviewStatus::Rejected;
+
+            if ($outcome->reason !== null) {
+                $meta = $review->meta ?? collect();
+                $meta->put('rejection_reason', $outcome->reason);
+                $review->meta = $meta;
+            }
+
+            return;
+        }
+
+        $review->status = $this->defaultStatus();
     }
 
     private function guardAgainstDuplicate(CreateReviewData $data): void

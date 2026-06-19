@@ -31,11 +31,21 @@ trait HasReviews
     }
 
     /**
+     * Top-level reviews only (excludes owner responses).
+     *
+     * @return MorphMany<Review, $this>
+     */
+    public function topLevelReviews(): MorphMany
+    {
+        return $this->reviews()->topLevel();
+    }
+
+    /**
      * @return MorphMany<Review, $this>
      */
     public function approvedReviews(): MorphMany
     {
-        return $this->reviews()->approved();
+        return $this->reviews()->topLevel()->approved();
     }
 
     public function averageRating(): ?float
@@ -45,7 +55,7 @@ trait HasReviews
 
     public function reviewsCount(): int
     {
-        return $this->reviews()->count();
+        return $this->reviews()->topLevel()->count();
     }
 
     public function approvedReviewsCount(): int

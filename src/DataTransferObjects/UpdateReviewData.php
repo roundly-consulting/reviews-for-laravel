@@ -20,5 +20,6 @@ final readonly class UpdateReviewData
         public ?string $content = null,
         public ?int $rating = null,
         public ?Collection $meta = null,
+        public ?bool $verified = null,
     ) {}
 }

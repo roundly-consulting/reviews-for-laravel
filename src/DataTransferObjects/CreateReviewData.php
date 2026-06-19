@@ -20,5 +20,6 @@ final readonly class CreateReviewData
         public ?int $rating = null,
         public ?Collection $meta = null,
         public bool $approved = false,
+        public bool $verified = false,
     ) {}
 }

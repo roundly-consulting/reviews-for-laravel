@@ -23,7 +23,36 @@ final class ReviewFactory extends Factory
             'content' => fake()->sentence(),
             'rating' => fake()->numberBetween(1, (int) config('reviews.max_rating', 5)),
             'status' => ReviewStatus::Pending->value,
+            'verified' => false,
         ];
+    }
+
+    public function verified(): self
+    {
+        return $this->state(fn (): array => ['verified' => true]);
+    }
+
+    public function unverified(): self
+    {
+        return $this->state(fn (): array => ['verified' => false]);
+    }
+
+    public function response(Review $parent): self
+    {
+        return $this->state(fn (): array => [
+            'parent_id' => $parent->getKey(),
+            'rating' => null,
+            'reviewable_type' => $parent->reviewable_type,
+            'reviewable_id' => $parent->reviewable_id,
+        ]);
+    }
+
+    public function helpfulVotes(int $helpful, int $unhelpful = 0): self
+    {
+        return $this->state(fn (): array => [
+            'helpful_count' => $helpful,
+            'unhelpful_count' => $unhelpful,
+        ]);
     }
 
     public function pending(): self

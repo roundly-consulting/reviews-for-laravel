@@ -91,4 +91,49 @@ trait HasReviewScopes
     {
         $query->orderByDesc('approved_at')->orderByDesc('created_at');
     }
+
+    /**
+     * @param  Builder<static>  $query
+     */
+    public function scopeVerified(Builder $query): void
+    {
+        $query->where('verified', true);
+    }
+
+    /**
+     * @param  Builder<static>  $query
+     */
+    public function scopeUnverified(Builder $query): void
+    {
+        $query->where('verified', false);
+    }
+
+    /**
+     * Top-level reviews only (excludes owner responses). Used by aggregates so
+     * responses never count toward ratings.
+     *
+     * @param  Builder<static>  $query
+     */
+    public function scopeTopLevel(Builder $query): void
+    {
+        $query->whereNull('parent_id');
+    }
+
+    /**
+     * @param  Builder<static>  $query
+     */
+    public function scopeResponses(Builder $query): void
+    {
+        $query->whereNotNull('parent_id');
+    }
+
+    /**
+     * Order by net helpful score (helpful minus unhelpful), most helpful first.
+     *
+     * @param  Builder<static>  $query
+     */
+    public function scopeMostHelpful(Builder $query): void
+    {
+        $query->orderByRaw('(helpful_count - unhelpful_count) desc')->orderByDesc('created_at');
+    }
 }

@@ -8,24 +8,31 @@ use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
+use RoundlyConsulting\Reviews\Actions\RespondToReview;
 use RoundlyConsulting\Reviews\Concerns\HasReviewScopes;
 use RoundlyConsulting\Reviews\Database\Factories\ReviewFactory;
 use RoundlyConsulting\Reviews\Enums\ReviewStatus;
 
 /**
  * @property int $id
+ * @property int|null $parent_id
  * @property string|null $reviewable_type
  * @property int|null $reviewable_id
  * @property string|null $author_type
  * @property int|null $author_id
  * @property int|null $rating
  * @property ReviewStatus $status
+ * @property bool $verified
  * @property string|null $title
  * @property string|null $content
  * @property Collection<string, mixed>|null $meta
+ * @property int $helpful_count
+ * @property int $unhelpful_count
  * @property CarbonImmutable|null $approved_at
  * @property CarbonInterface|null $created_at
  * @property CarbonInterface|null $updated_at
@@ -47,7 +54,10 @@ class Review extends Model
         return [
             'rating' => 'integer',
             'status' => ReviewStatus::class,
+            'verified' => 'boolean',
             'meta' => 'collection',
+            'helpful_count' => 'integer',
+            'unhelpful_count' => 'integer',
             'approved_at' => 'immutable_datetime',
         ];
     }
@@ -62,6 +72,61 @@ class Review extends Model
     public function author(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    /** @return BelongsTo<Review, $this> */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    /** @return HasMany<Review, $this> */
+    public function responses(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_id');
+    }
+
+    /** @return HasMany<ReviewVote, $this> */
+    public function votes(): HasMany
+    {
+        /** @var class-string<ReviewVote> $model */
+        $model = config('reviews.vote_model', ReviewVote::class);
+
+        return $this->hasMany($model, 'review_id');
+    }
+
+    public function helpfulScore(): int
+    {
+        return $this->helpful_count - $this->unhelpful_count;
+    }
+
+    public function isResponse(): bool
+    {
+        return $this->parent_id !== null;
+    }
+
+    public function respond(Model $author, string $content, ?string $title = null): self
+    {
+        /** @var self $response */
+        $response = app(RespondToReview::class)->execute($this, $author, $content, $title);
+
+        return $response;
+    }
+
+    public function markVerified(): self
+    {
+        $this->verified = true;
+        $this->save();
+
+        return $this;
+    }
+
+    public function markUnverified(): self
+    {
+        $this->verified = false;
+        $this->save();
+
+        return $this;
     }
 
     public function isPending(): bool

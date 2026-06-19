@@ -38,6 +38,10 @@ final class UpdateReview
             $review->meta = $data->meta;
         }
 
+        if ($data->verified !== null) {
+            $review->verified = $data->verified;
+        }
+
         if ($contentChanged && (bool) config('reviews.reset_status_on_edit', true)) {
             $review->status = ReviewStatus::Pending;
             $review->approved_at = null;

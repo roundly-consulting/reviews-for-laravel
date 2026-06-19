@@ -13,22 +13,24 @@ use RoundlyConsulting\Reviews\Models\Review;
 /**
  * Fluent builder for creating a review. Chain setters then call create().
  */
-final class PendingReview
+class PendingReview
 {
-    private ?Model $reviewable = null;
+    protected ?Model $reviewable = null;
 
-    private ?Model $author = null;
+    protected ?Model $author = null;
 
-    private ?int $rating = null;
+    protected ?int $rating = null;
 
-    private ?string $title = null;
+    protected ?string $title = null;
 
-    private ?string $content = null;
+    protected ?string $content = null;
 
     /** @var Collection<string, mixed>|null */
-    private ?Collection $meta = null;
+    protected ?Collection $meta = null;
 
-    private bool $approved = false;
+    protected bool $approved = false;
+
+    protected bool $verified = false;
 
     public function __construct(
         private readonly CreateReview $createReview = new CreateReview,
@@ -86,6 +88,13 @@ final class PendingReview
         return $this;
     }
 
+    public function verified(bool $verified = true): self
+    {
+        $this->verified = $verified;
+
+        return $this;
+    }
+
     public function create(): Review
     {
         return $this->createReview->execute(new CreateReviewData(
@@ -96,6 +105,7 @@ final class PendingReview
             rating: $this->rating,
             meta: $this->meta,
             approved: $this->approved,
+            verified: $this->verified,
         ));
     }
 
