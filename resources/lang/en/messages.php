@@ -14,5 +14,6 @@ return [
     'review' => [
         'empty' => 'A review must have either a rating or content.',
         'duplicate' => 'This author has already reviewed this subject.',
+        'banned_word' => 'This review contains language that is not allowed.',
     ],
 ];
