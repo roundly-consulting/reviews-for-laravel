@@ -4,20 +4,25 @@ declare(strict_types=1);
 
 use RoundlyConsulting\Reviews\Enums\ReviewStatus;
 use RoundlyConsulting\Reviews\Models\Review;
+use RoundlyConsulting\Reviews\Models\ReviewVote;
+use RoundlyConsulting\Reviews\Moderation\NullModerator;
 
 return [
 
     /*
     |--------------------------------------------------------------------------
-    | Review Model
+    | Models
     |--------------------------------------------------------------------------
     |
-    | The Eloquent model used to persist reviews. Override this with your own
-    | model (extending the package model) when you need custom behaviour.
+    | The Eloquent models used to persist reviews and helpful votes. Override
+    | either with your own model (extending the package model) when you need
+    | custom behaviour.
     |
     */
 
     'model' => Review::class,
+
+    'vote_model' => ReviewVote::class,
 
     /*
     |--------------------------------------------------------------------------
@@ -86,5 +91,42 @@ return [
     */
 
     'register_facade_alias' => (bool) env('REVIEWS_REGISTER_FACADE_ALIAS', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Moderator
+    |--------------------------------------------------------------------------
+    |
+    | The ReviewModerator implementation bound into the container and consulted
+    | when a new (non force-approved) review is created. The default no-op
+    | moderator leaves reviews at their default status. Swap in WordListModerator
+    | (or your own) to auto-approve/auto-reject. Banned words feed the bundled
+    | WordListModerator and are matched case-insensitively as whole words.
+    |
+    */
+
+    'moderator' => NullModerator::class,
+
+    'moderation' => [
+        'banned_words' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('REVIEWS_BANNED_WORDS', '')),
+        ))),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cached Aggregates
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, reviewable models using the MaintainsReviewAggregates trait
+    | have their reviews_count / reviews_avg columns kept in sync automatically
+    | on every approved-review change. Publish the aggregate migration stub to
+    | add those columns, then run "php artisan reviews:recount {Model}" to seed
+    | existing rows.
+    |
+    */
+
+    'cache_aggregates' => (bool) env('REVIEWS_CACHE_AGGREGATES', false),
 
 ];
