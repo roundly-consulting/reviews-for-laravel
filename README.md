@@ -1,3 +1,11 @@
+<!-- roundly-hero:start -->
+<p align="center">
+  <a href="https://roundly-consulting.com/open-source/docs/reviews-for-laravel?utm_source=github&utm_medium=readme&utm_campaign=open-source&utm_content=reviews-for-laravel">
+    <img src="art/hero.png" alt="Reviews for Laravel — Roundly open source" width="100%">
+  </a>
+</p>
+<!-- roundly-hero:end -->
+
 # Reviews for Laravel
 
 A complete, batteries-included reviews and ratings system for Laravel. A polymorphic review
