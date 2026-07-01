@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Reviews\Enums;
 
+use RoundlyConsulting\Enums\Helpers;
+
 enum ReviewStatus: string
 {
+    use Helpers;
+
     case Pending = 'pending';
     case Approved = 'approved';
     case Rejected = 'rejected';
@@ -23,10 +27,5 @@ enum ReviewStatus: string
     public function isRejected(): bool
     {
         return $this === self::Rejected;
-    }
-
-    public function label(): string
-    {
-        return (string) trans('reviews::messages.status.'.$this->value);
     }
 }

@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Reviews\Enums;
 
+use RoundlyConsulting\Enums\Helpers;
+
 enum ModerationDecision: string
 {
+    use Helpers;
+
     case Approve = 'approve';
     case Reject = 'reject';
     case Pending = 'pending';

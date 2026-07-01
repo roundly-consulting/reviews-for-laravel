@@ -3,11 +3,6 @@
 declare(strict_types=1);
 
 return [
-    'status' => [
-        'pending' => 'Pending',
-        'approved' => 'Approved',
-        'rejected' => 'Rejected',
-    ],
     'rating' => [
         'out_of_range' => 'The rating :given must be between :min and :max.',
     ],
