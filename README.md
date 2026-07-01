@@ -15,10 +15,31 @@ can review anything — with star ratings, a moderation lifecycle, verified-purc
 helpful votes, owner responses, cached aggregates, a pluggable moderator, query scopes, a
 fluent facade, model traits, a JSON resource, and first-class testing helpers.
 
+Reviews can also carry **photos** — a responsive image gallery per review, powered by
+`media-library-for-laravel` — and its status enums adopt the shared `enums-for-laravel`
+helpers.
+
+## Integrates with
+
+This package builds directly on two other roundly-consulting packages (both hard
+dependencies, installed automatically):
+
+- **[`media-library-for-laravel`](https://github.com/roundly-consulting/media-library-for-laravel)** —
+  powers **review photos**. The bundled `Review` is a media owner with a config-driven `photos`
+  bucket: responsive image variants, an ordered gallery, a per-review limit, fluent builder attach
+  (`withPhoto()`/`withPhotos()`), photo counts on the rating summary, warm-on-approval, and
+  cleanup on force-delete. Disable it entirely with `reviews.photos.enabled = false`.
+- **[`enums-for-laravel`](https://github.com/roundly-consulting/enums-for-laravel)** —
+  `ReviewStatus` and `ModerationDecision` use the `RoundlyConsulting\Enums\Helpers` trait, adding
+  `values()`, `labels()`, `options()`, `toOptions()`, `validationRule()`, `readable()`, and case
+  lookups on top of their domain methods.
+
 ## Requirements
 
 - PHP `^8.4`
 - Laravel `^12.0` or `^13.0`
+- `roundly-consulting/media-library-for-laravel` and `roundly-consulting/enums-for-laravel`
+  (pulled in automatically)
 
 ## Installation
 
@@ -107,6 +128,20 @@ return [
     // Keep reviews_count / reviews_avg in sync on reviewables that opt in.
     'cache_aggregates' => (bool) env('REVIEWS_CACHE_AGGREGATES', false),
 
+    // Review photos (media-library-for-laravel). Set enabled = false to switch the
+    // whole feature off — the bucket is then never declared and withPhoto() throws.
+    'photos' => [
+        'enabled' => (bool) env('REVIEWS_PHOTOS_ENABLED', true),
+        'bucket' => env('REVIEWS_PHOTOS_BUCKET', 'photos'),
+        'disk' => env('REVIEWS_PHOTOS_DISK'),
+        'max' => (int) env('REVIEWS_PHOTOS_MAX', 5),
+        'max_file_size' => (int) env('REVIEWS_PHOTOS_MAX_FILE_SIZE', 5 * 1024 * 1024),
+        'accepted_mime_types' => ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+        'responsive_widths' => [320, 640, 1024],
+        'visibility' => env('REVIEWS_PHOTOS_VISIBILITY', 'public'),
+        'warm_on_approval' => (bool) env('REVIEWS_PHOTOS_WARM_ON_APPROVAL', true),
+    ],
+
 ];
 ```
 
@@ -124,6 +159,15 @@ return [
 | `moderator` | `class-string` | `NullModerator::class` | — | `ReviewModerator` consulted on create; swap in `WordListModerator` or your own. |
 | `moderation.banned_words` | `list<string>` | `[]` | `REVIEWS_BANNED_WORDS` | Comma-separated words the `WordListModerator` rejects on. |
 | `cache_aggregates` | `bool` | `false` | `REVIEWS_CACHE_AGGREGATES` | Maintain cached `reviews_count` / `reviews_avg` on opted-in reviewables. |
+| `photos.enabled` | `bool` | `true` | `REVIEWS_PHOTOS_ENABLED` | Master switch for review photos; when `false`, `withPhoto()` throws and the bucket is never declared. |
+| `photos.bucket` | `string` | `photos` | `REVIEWS_PHOTOS_BUCKET` | The media bucket photos are stored in. |
+| `photos.disk` | `?string` | `null` | `REVIEWS_PHOTOS_DISK` | Storage disk (`null` uses the media-library default). |
+| `photos.max` | `int` | `5` | `REVIEWS_PHOTOS_MAX` | Per-review photo limit (`0` = unlimited); overflow throws `tooManyPhotos()`. |
+| `photos.max_file_size` | `int` | `5242880` | `REVIEWS_PHOTOS_MAX_FILE_SIZE` | Largest accepted upload, in bytes. |
+| `photos.accepted_mime_types` | `list<string>` | image types | — | Whitelisted photo mime types. |
+| `photos.responsive_widths` | `list<int>` | `[320, 640, 1024]` | — | Responsive variant width ladder (`null` uses the media default). |
+| `photos.visibility` | `string` | `public` | `REVIEWS_PHOTOS_VISIBILITY` | `public` or `private`. |
+| `photos.warm_on_approval` | `bool` | `true` | `REVIEWS_PHOTOS_WARM_ON_APPROVAL` | Queue variant generation when a review is approved. |
 
 The package works with zero configuration; every key above has a sensible default.
 
@@ -192,10 +236,57 @@ $review = app(CreateReview::class)->execute(new CreateReviewData(
 ));
 ```
 
+### Review photos
+
+Attach photos to a review straight from the builder. Photos accept an `UploadedFile`, a
+media-library **draft token**, a disk path, or a URL, and are bound to the review inside the
+create transaction — **before** `ReviewCreated` fires — so listeners and broadcasts see them.
+
+```php
+$review = Reviews::for($restaurant)
+    ->by($user)
+    ->rating(5)
+    ->content('Great place')
+    ->withPhoto($request->file('photo'))          // one UploadedFile
+    ->withPhotos($request->file('photos'))        // an array of files
+    ->withDraftPhoto($token)                       // a media-library draft token
+    ->withPhotoFromDisk('incoming/a.jpg', 's3')    // a path on a disk
+    ->withPhotoFromUrl('https://example.com/a.jpg')
+    ->create();
+```
+
+Read them back with the readers the bundled `Review` gains:
+
+```php
+$review->photos();                 // Collection<Media> (ordered gallery)
+$review->hasPhotos();              // bool
+$review->photoCount();             // int
+$review->firstPhotoUrl();          // string ('' when empty)
+$review->firstPhotoUrl('thumb');   // a named responsive variant
+$review->photoUrls();              // list<string>
+$review->responsivePhotos(['class' => 'photo']); // list<string> of <img srcset="…">
+$review->firstPhotoTemporaryUrl(); // signed URL (useful for a private bucket)
+```
+
+The `photos` bucket is **public** by default, holds up to `photos.max` (default **5**) images,
+and produces responsive variants for the configured `responsive_widths`. Exceeding the limit
+throws `InvalidReviewException::tooManyPhotos()`. When `photos.enabled` is `false`, the bucket is
+never declared and `withPhoto()` throws `InvalidReviewException::photosDisabled()`.
+
+Photos are warmed on approval (a queued variant-generation job per photo, via
+`ReviewApproved`) and cleaned up when a review is **force-deleted** — a soft-deleted (and later
+restored) review keeps its photos. The rating summary also reports `photoCount` and
+`reviewsWithPhotos` across a subject's approved reviews (see below), and `ReviewResource`
+exposes a `photos` array of `{ id, url, srcset }`.
+
 ### Moderation lifecycle
 
 Every review has a `ReviewStatus` of `Pending`, `Approved`, or `Rejected`. New reviews are
 `pending` unless `auto_approve` is enabled.
+
+`ReviewStatus` and `ModerationDecision` adopt the `enums-for-laravel` helpers, so you get
+`ReviewStatus::values()`, `->labels()`, `->options()`, `->toOptions()`, `->validationRule()`
+(`in:pending,approved,rejected`), and `$status->readable()` for free.
 
 ```php
 Reviews::approve($review);            // marks approved, stamps approved_at
@@ -239,14 +330,17 @@ $restaurant->ratingSummary();         // RatingSummary DTO
 $restaurant->addReview($user)->rating(5)->content('...')->create();
 ```
 
-`ratingSummary()` returns a `RatingSummary` DTO (`average`, `count`, `distribution`) with a
-`toArray()` for JSON responses. The same aggregates are available on the facade:
+`ratingSummary()` returns a `RatingSummary` DTO (`average`, `count`, `distribution`,
+`photoCount`, `reviewsWithPhotos`) with a `toArray()` for JSON responses. The same aggregates
+are available on the facade:
 
 ```php
 Reviews::averageFor($restaurant);
 Reviews::countFor($restaurant);
 Reviews::distributionFor($restaurant);
 Reviews::summaryFor($restaurant);
+Reviews::photoCountFor($restaurant);         // total photos on approved reviews
+Reviews::reviewsWithPhotosFor($restaurant);  // approved reviews that carry a photo
 ```
 
 ### Authoring lookups
