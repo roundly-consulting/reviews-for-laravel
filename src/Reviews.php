@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Facade;
 use Illuminate\Support\Traits\Macroable;
+use RoundlyConsulting\MediaLibrary\Models\Media;
 use RoundlyConsulting\Reviews\Actions\ApproveReview;
 use RoundlyConsulting\Reviews\Actions\DeleteReview;
 use RoundlyConsulting\Reviews\Actions\RejectReview;
@@ -127,7 +128,54 @@ class Reviews
             average: $this->averageFor($reviewable),
             count: $this->countFor($reviewable),
             distribution: $this->distributionFor($reviewable),
+            photoCount: $this->photoCountFor($reviewable),
+            reviewsWithPhotos: $this->reviewsWithPhotosFor($reviewable),
         );
+    }
+
+    /**
+     * Total number of photos across a subject's approved, top-level reviews.
+     */
+    public function photoCountFor(Model $reviewable): int
+    {
+        return $this->photosQueryFor($reviewable)?->count() ?? 0;
+    }
+
+    /**
+     * Number of a subject's approved, top-level reviews that carry at least one photo.
+     */
+    public function reviewsWithPhotosFor(Model $reviewable): int
+    {
+        return $this->photosQueryFor($reviewable)?->distinct()->count('model_id') ?? 0;
+    }
+
+    /**
+     * A query over the media rows in the photos bucket owned by a subject's approved,
+     * top-level reviews. Returns null when photos are disabled.
+     *
+     * @return Builder<Media>|null
+     */
+    protected function photosQueryFor(Model $reviewable): ?Builder
+    {
+        if (! (bool) config('reviews.photos.enabled', true)) {
+            return null;
+        }
+
+        /** @var class-string<Review> $reviewModel */
+        $reviewModel = config('reviews.model', Review::class);
+
+        /** @var class-string<Media> $mediaModel */
+        $mediaModel = config('media.media_model', Media::class);
+
+        $bucket = config('reviews.photos.bucket', 'photos');
+        $bucket = is_string($bucket) && $bucket !== '' ? $bucket : 'photos';
+
+        $reviewIds = $this->approvedQueryFor($reviewable)->pluck((new $reviewModel)->getKeyName());
+
+        return $mediaModel::query()
+            ->where('bucket_name', $bucket)
+            ->where('model_type', (new $reviewModel)->getMorphClass())
+            ->whereIn('model_id', $reviewIds);
     }
 
     /**

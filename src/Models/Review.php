@@ -13,7 +13,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
+use RoundlyConsulting\MediaLibrary\Contracts\HasMedia;
 use RoundlyConsulting\Reviews\Actions\RespondToReview;
+use RoundlyConsulting\Reviews\Concerns\HasReviewPhotos;
 use RoundlyConsulting\Reviews\Concerns\HasReviewScopes;
 use RoundlyConsulting\Reviews\Database\Factories\ReviewFactory;
 use RoundlyConsulting\Reviews\Enums\ReviewStatus;
@@ -38,11 +40,12 @@ use RoundlyConsulting\Reviews\Enums\ReviewStatus;
  * @property CarbonInterface|null $updated_at
  * @property CarbonInterface|null $deleted_at
  */
-class Review extends Model
+class Review extends Model implements HasMedia
 {
     /** @use HasFactory<ReviewFactory> */
     use HasFactory;
 
+    use HasReviewPhotos;
     use HasReviewScopes;
     use SoftDeletes;
 

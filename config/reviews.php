@@ -129,4 +129,56 @@ return [
 
     'cache_aggregates' => (bool) env('REVIEWS_CACHE_AGGREGATES', false),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Review Photos
+    |--------------------------------------------------------------------------
+    |
+    | Reviews can carry a gallery of photos, stored through
+    | roundly-consulting/media-library-for-laravel. Each review becomes a media
+    | owner with a single "photos" bucket. Disable the whole feature with
+    | "enabled" => false — the bucket is then never declared and the builder's
+    | withPhoto()/withPhotos() helpers throw. Keys:
+    |
+    |   enabled              Master switch for the photos feature.
+    |   bucket               The media bucket name photos are stored in.
+    |   disk                 Storage disk (null uses the media-library default).
+    |   max                  Per-review photo limit (0 = unlimited); overflow
+    |                        throws InvalidReviewException::tooManyPhotos().
+    |   max_file_size        Largest accepted upload, in bytes.
+    |   accepted_mime_types  Whitelisted image mime types.
+    |   responsive_widths    Width ladder for responsive variants (null uses the
+    |                        media-library default ladder).
+    |   visibility           "public" (default) or "private".
+    |   warm_on_approval     Queue variant generation when a review is approved.
+    |
+    */
+
+    'photos' => [
+
+        'enabled' => (bool) env('REVIEWS_PHOTOS_ENABLED', true),
+
+        'bucket' => env('REVIEWS_PHOTOS_BUCKET', 'photos'),
+
+        'disk' => env('REVIEWS_PHOTOS_DISK'),
+
+        'max' => (int) env('REVIEWS_PHOTOS_MAX', 5),
+
+        'max_file_size' => (int) env('REVIEWS_PHOTOS_MAX_FILE_SIZE', 5 * 1024 * 1024),
+
+        'accepted_mime_types' => [
+            'image/jpeg',
+            'image/png',
+            'image/webp',
+            'image/gif',
+        ],
+
+        'responsive_widths' => [320, 640, 1024],
+
+        'visibility' => env('REVIEWS_PHOTOS_VISIBILITY', 'public'),
+
+        'warm_on_approval' => (bool) env('REVIEWS_PHOTOS_WARM_ON_APPROVAL', true),
+
+    ],
+
 ];

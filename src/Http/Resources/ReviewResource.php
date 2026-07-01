@@ -44,9 +44,31 @@ final class ReviewResource extends JsonResource
                 'id' => $review->reviewable_id,
             ],
             'responses' => ReviewResource::collection($this->whenLoaded('responses')),
+            'photos' => $this->photos($review),
             'created_at' => $review->created_at?->toIso8601String(),
             'updated_at' => $review->updated_at?->toIso8601String(),
             'approved_at' => $review->approved_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * The review's photos as `{id, url, srcset}` entries, or `[]` when photos are disabled
+     * or the bucket is empty.
+     *
+     * @return list<array{id: int|string|null, url: string, srcset: string}>
+     */
+    private function photos(Review $review): array
+    {
+        $photos = [];
+
+        foreach ($review->photos() as $media) {
+            $photos[] = [
+                'id' => $media->getKey(),
+                'url' => $media->getUrl(),
+                'srcset' => $media->srcset(),
+            ];
+        }
+
+        return $photos;
     }
 }

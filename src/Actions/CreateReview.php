@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Reviews\Actions;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use RoundlyConsulting\Reviews\Contracts\ReviewModerator;
 use RoundlyConsulting\Reviews\DataTransferObjects\CreateReviewData;
 use RoundlyConsulting\Reviews\Enums\ReviewStatus;
 use RoundlyConsulting\Reviews\Events\ReviewCreated;
 use RoundlyConsulting\Reviews\Exceptions\InvalidReviewException;
 use RoundlyConsulting\Reviews\Models\Review;
+use RoundlyConsulting\Reviews\Support\PendingPhoto;
 
 final class CreateReview
 {
@@ -47,11 +49,61 @@ final class CreateReview
         $review->author()->associate($data->author);
         $review->reviewable()->associate($data->reviewable);
 
-        $review->save();
+        // Persist the review and bind its photos atomically: an over-limit request or any failed
+        // upload rolls the whole create back, so no review is left without its expected gallery.
+        DB::transaction(function () use ($review, $data): void {
+            $review->save();
 
+            $this->attachPhotos($review, $data->photos);
+        });
+
+        // Dispatch after commit so listeners and broadcasts see the persisted photos.
         ReviewCreated::dispatch($review);
 
         return $review;
+    }
+
+    /**
+     * @param  list<PendingPhoto>  $photos
+     */
+    private function attachPhotos(Review $review, array $photos): void
+    {
+        if ($photos === []) {
+            return;
+        }
+
+        if (! (bool) config('reviews.photos.enabled', true)) {
+            throw InvalidReviewException::photosDisabled();
+        }
+
+        $this->guardPhotoLimit($review, count($photos));
+
+        $bucket = $review->photosBucket();
+
+        foreach ($photos as $photo) {
+            match ($photo->type) {
+                PendingPhoto::TYPE_FILE => $review->addMedia($photo->value)->toMediaBucket($bucket),
+                PendingPhoto::TYPE_URL => $review->addMediaFromUrl((string) $photo->value)->toMediaBucket($bucket),
+                PendingPhoto::TYPE_DISK => $review->addMediaFromDisk((string) $photo->value, $photo->disk)->toMediaBucket($bucket),
+                PendingPhoto::TYPE_DRAFT => $review->attachDraftMedia((string) $photo->value, $bucket),
+                default => throw InvalidReviewException::photosDisabled(),
+            };
+        }
+    }
+
+    private function guardPhotoLimit(Review $review, int $incoming): void
+    {
+        $max = (int) config('reviews.photos.max', 5);
+
+        if ($max <= 0) {
+            return;
+        }
+
+        $existing = $review->photos()->count();
+
+        if ($existing + $incoming > $max) {
+            throw InvalidReviewException::tooManyPhotos($max);
+        }
     }
 
     private function applyModeration(Review $review): void

@@ -13,10 +13,12 @@ final readonly class RatingSummary
         public ?float $average,
         public int $count,
         public array $distribution,
+        public int $photoCount = 0,
+        public int $reviewsWithPhotos = 0,
     ) {}
 
     /**
-     * @return array{average: float|null, count: int, distribution: array<int, int>}
+     * @return array{average: float|null, count: int, distribution: array<int, int>, photo_count: int, reviews_with_photos: int}
      */
     public function toArray(): array
     {
@@ -24,6 +26,8 @@ final readonly class RatingSummary
             'average' => $this->average,
             'count' => $this->count,
             'distribution' => $this->distribution,
+            'photo_count' => $this->photoCount,
+            'reviews_with_photos' => $this->reviewsWithPhotos,
         ];
     }
 }

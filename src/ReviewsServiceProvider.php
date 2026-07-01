@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Reviews;
 
 use Illuminate\Foundation\AliasLoader;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use RoundlyConsulting\Reviews\Commands\RecountReviewsCommand;
 use RoundlyConsulting\Reviews\Contracts\ReviewModerator;
+use RoundlyConsulting\Reviews\Events\ReviewApproved;
 use RoundlyConsulting\Reviews\Facades\Reviews as ReviewsFacade;
+use RoundlyConsulting\Reviews\Listeners\PurgeReviewPhotos;
+use RoundlyConsulting\Reviews\Listeners\WarmReviewPhotoVariants;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Moderation\NullModerator;
 use RoundlyConsulting\Reviews\Observers\ReviewAggregateObserver;
@@ -42,6 +46,17 @@ final class ReviewsServiceProvider extends ServiceProvider
             /** @var class-string<Review> $model */
             $model = config('reviews.model', Review::class);
             $model::observe(ReviewAggregateObserver::class);
+        }
+
+        if ((bool) config('reviews.photos.enabled', true)) {
+            Event::listen(ReviewApproved::class, WarmReviewPhotoVariants::class);
+
+            /** @var class-string<Review> $reviewModel */
+            $reviewModel = config('reviews.model', Review::class);
+
+            $reviewModel::forceDeleted(static function (Review $review): void {
+                app(PurgeReviewPhotos::class)->handle($review);
+            });
         }
 
         if ($this->app->runningInConsole()) {

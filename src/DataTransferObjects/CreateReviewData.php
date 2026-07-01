@@ -6,11 +6,13 @@ namespace RoundlyConsulting\Reviews\DataTransferObjects;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
+use RoundlyConsulting\Reviews\Support\PendingPhoto;
 
 final readonly class CreateReviewData
 {
     /**
      * @param  Collection<string, mixed>|null  $meta
+     * @param  list<PendingPhoto>  $photos
      */
     public function __construct(
         public Model $author,
@@ -21,5 +23,6 @@ final readonly class CreateReviewData
         public ?Collection $meta = null,
         public bool $approved = false,
         public bool $verified = false,
+        public array $photos = [],
     ) {}
 }
