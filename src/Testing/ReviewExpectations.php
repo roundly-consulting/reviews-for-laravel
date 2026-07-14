@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Reviews\Testing;
 
 use Illuminate\Database\Eloquent\Model;
-use RoundlyConsulting\Reviews\Models\Review;
+use RoundlyConsulting\Reviews\Support\ReviewModel;
 
 /**
  * Registers Pest expectation matchers for review assertions. Host applications
@@ -27,7 +27,7 @@ final class ReviewExpectations
             /** @var Model $reviewable */
             $reviewable = $this->value;
 
-            $query = Review::query()
+            $query = ReviewModel::query()
                 ->topLevel()
                 ->where('reviewable_type', $reviewable->getMorphClass())
                 ->where('reviewable_id', $reviewable->getKey());
@@ -46,7 +46,7 @@ final class ReviewExpectations
             /** @var Model $reviewable */
             $reviewable = $this->value;
 
-            $exists = Review::query()
+            $exists = ReviewModel::query()
                 ->topLevel()
                 ->approved()
                 ->where('reviewable_type', $reviewable->getMorphClass())
