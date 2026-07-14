@@ -49,11 +49,20 @@ Install the package via Composer:
 composer require roundly-consulting/reviews-for-laravel
 ```
 
-Publish and run the migrations:
+Publish and run the migrations. The package's migrations are **publish-only** — nothing is
+auto-loaded, so a bare `php artisan migrate` will not create the `reviews` tables until you
+have published them:
 
 ```bash
 php artisan vendor:publish --tag="reviews-migrations"
 php artisan migrate
+```
+
+Review photos are stored through `media-library-for-laravel`, whose migration is published the
+same way:
+
+```bash
+php artisan vendor:publish --tag="media-migrations"
 ```
 
 Optionally publish the config file:
@@ -75,10 +84,12 @@ php artisan vendor:publish --tag="reviews-resources"
 ```
 
 If you want **cached aggregates** on a reviewable table, publish the aggregate-columns
-migration stub, rename its table, and migrate:
+migration stub, rename its placeholder table, and migrate. It has its own tag (it is opt-in,
+and you publish it once per reviewable table):
 
 ```bash
 php artisan vendor:publish --tag="reviews-aggregate-migrations"
+php artisan migrate
 ```
 
 ## Configuration
