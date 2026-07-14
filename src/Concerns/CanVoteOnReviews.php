@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Models\ReviewVote;
 use RoundlyConsulting\Reviews\Reviews;
+use RoundlyConsulting\Reviews\Support\ReviewVoteModel;
 
 /**
  * Adds helpful-voting capability to a voter model.
@@ -42,10 +43,7 @@ trait CanVoteOnReviews
      */
     private function voteQueryFor(Review $review): Builder
     {
-        /** @var class-string<ReviewVote> $model */
-        $model = config('reviews.vote_model', ReviewVote::class);
-
-        return $model::query()
+        return ReviewVoteModel::query()
             ->where('review_id', $review->getKey())
             ->where('voter_type', $this->getMorphClass())
             ->where('voter_id', $this->getKey());

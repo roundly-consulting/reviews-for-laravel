@@ -7,6 +7,7 @@ namespace RoundlyConsulting\Reviews\Concerns;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use RoundlyConsulting\Reviews\Models\Review;
+use RoundlyConsulting\Reviews\Support\ReviewModel;
 
 /**
  * Adds authoring capability to a model: the reviews it has written and lookups
@@ -21,10 +22,7 @@ trait CanReview
      */
     public function reviewsAuthored(): MorphMany
     {
-        /** @var class-string<Review> $model */
-        $model = config('reviews.model', Review::class);
-
-        return $this->morphMany($model, 'author');
+        return $this->morphMany(ReviewModel::class(), 'author');
     }
 
     public function hasReviewed(Model $reviewable): bool

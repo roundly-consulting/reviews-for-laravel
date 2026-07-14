@@ -10,6 +10,7 @@ use RoundlyConsulting\Reviews\DataTransferObjects\RatingSummary;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Reviews;
 use RoundlyConsulting\Reviews\Support\PendingReview;
+use RoundlyConsulting\Reviews\Support\ReviewModel;
 
 /**
  * Adds review capability to a subject model: relations, aggregates, and a
@@ -24,10 +25,7 @@ trait HasReviews
      */
     public function reviews(): MorphMany
     {
-        /** @var class-string<Review> $model */
-        $model = config('reviews.model', Review::class);
-
-        return $this->morphMany($model, 'reviewable');
+        return $this->morphMany(ReviewModel::class(), 'reviewable');
     }
 
     /**

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use RoundlyConsulting\Reviews\Events\ReviewVoted;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Models\ReviewVote;
+use RoundlyConsulting\Reviews\Support\ReviewVoteModel;
 
 /**
  * Records (or flips) a single voter's helpful/unhelpful vote on a review.
@@ -22,11 +23,8 @@ final class VoteOnReview
 
     public function execute(Review $review, Model $voter, bool $helpful = true): ReviewVote
     {
-        /** @var class-string<ReviewVote> $model */
-        $model = config('reviews.vote_model', ReviewVote::class);
-
         /** @var ReviewVote $vote */
-        $vote = $model::query()->updateOrCreate(
+        $vote = ReviewVoteModel::query()->updateOrCreate(
             [
                 'review_id' => $review->getKey(),
                 'voter_type' => $voter->getMorphClass(),

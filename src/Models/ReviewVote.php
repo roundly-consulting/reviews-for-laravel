@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use RoundlyConsulting\Reviews\Database\Factories\ReviewVoteFactory;
+use RoundlyConsulting\Reviews\Support\ReviewModel;
 
 /**
  * @property int $id
@@ -38,10 +39,7 @@ class ReviewVote extends Model
     /** @return BelongsTo<Review, $this> */
     public function review(): BelongsTo
     {
-        /** @var class-string<Review> $model */
-        $model = config('reviews.model', Review::class);
-
-        return $this->belongsTo($model, 'review_id');
+        return $this->belongsTo(ReviewModel::class(), 'review_id');
     }
 
     /** @return MorphTo<Model, $this> */

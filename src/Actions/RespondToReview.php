@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use RoundlyConsulting\Reviews\Enums\ReviewStatus;
 use RoundlyConsulting\Reviews\Events\ReviewResponded;
 use RoundlyConsulting\Reviews\Models\Review;
+use RoundlyConsulting\Reviews\Support\ReviewModel;
 
 /**
  * Creates a response to a review. A response is itself a review row tied to the
@@ -45,9 +46,6 @@ final class RespondToReview
 
     private function newReview(): Review
     {
-        /** @var class-string<Review> $model */
-        $model = config('reviews.model', Review::class);
-
-        return new $model;
+        return ReviewModel::new();
     }
 }

@@ -7,7 +7,7 @@ namespace RoundlyConsulting\Reviews\Actions;
 use Illuminate\Database\Eloquent\Model;
 use RoundlyConsulting\Reviews\Events\ReviewVoteRemoved;
 use RoundlyConsulting\Reviews\Models\Review;
-use RoundlyConsulting\Reviews\Models\ReviewVote;
+use RoundlyConsulting\Reviews\Support\ReviewVoteModel;
 
 /**
  * Removes a voter's vote from a review (idempotent) and recomputes the
@@ -21,10 +21,7 @@ final class RemoveReviewVote
 
     public function execute(Review $review, Model $voter): void
     {
-        /** @var class-string<ReviewVote> $model */
-        $model = config('reviews.vote_model', ReviewVote::class);
-
-        $deleted = $model::query()
+        $deleted = ReviewVoteModel::query()
             ->where('review_id', $review->getKey())
             ->where('voter_type', $voter->getMorphClass())
             ->where('voter_id', $voter->getKey())

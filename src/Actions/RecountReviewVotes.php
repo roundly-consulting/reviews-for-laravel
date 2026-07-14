@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Reviews\Actions;
 
 use RoundlyConsulting\Reviews\Models\Review;
-use RoundlyConsulting\Reviews\Models\ReviewVote;
+use RoundlyConsulting\Reviews\Support\ReviewVoteModel;
 
 /**
  * Recomputes a review's denormalized helpful/unhelpful tallies from its votes.
@@ -14,15 +14,12 @@ final class RecountReviewVotes
 {
     public function execute(Review $review): Review
     {
-        /** @var class-string<ReviewVote> $model */
-        $model = config('reviews.vote_model', ReviewVote::class);
-
-        $helpful = $model::query()
+        $helpful = ReviewVoteModel::query()
             ->where('review_id', $review->getKey())
             ->where('helpful', true)
             ->count();
 
-        $unhelpful = $model::query()
+        $unhelpful = ReviewVoteModel::query()
             ->where('review_id', $review->getKey())
             ->where('helpful', false)
             ->count();

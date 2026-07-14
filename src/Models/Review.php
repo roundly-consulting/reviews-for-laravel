@@ -19,6 +19,7 @@ use RoundlyConsulting\Reviews\Concerns\HasReviewPhotos;
 use RoundlyConsulting\Reviews\Concerns\HasReviewScopes;
 use RoundlyConsulting\Reviews\Database\Factories\ReviewFactory;
 use RoundlyConsulting\Reviews\Enums\ReviewStatus;
+use RoundlyConsulting\Reviews\Support\ReviewVoteModel;
 
 /**
  * @property int $id
@@ -92,10 +93,7 @@ class Review extends Model implements HasMedia
     /** @return HasMany<ReviewVote, $this> */
     public function votes(): HasMany
     {
-        /** @var class-string<ReviewVote> $model */
-        $model = config('reviews.vote_model', ReviewVote::class);
-
-        return $this->hasMany($model, 'review_id');
+        return $this->hasMany(ReviewVoteModel::class(), 'review_id');
     }
 
     public function helpfulScore(): int

@@ -13,6 +13,7 @@ use RoundlyConsulting\Reviews\Events\ReviewCreated;
 use RoundlyConsulting\Reviews\Exceptions\InvalidReviewException;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Support\PendingPhoto;
+use RoundlyConsulting\Reviews\Support\ReviewModel;
 
 final class CreateReview
 {
@@ -157,9 +158,6 @@ final class CreateReview
 
     private function newReview(): Review
     {
-        /** @var class-string<Review> $model */
-        $model = config('reviews.model', Review::class);
-
-        return new $model;
+        return ReviewModel::new();
     }
 }

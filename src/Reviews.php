@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Facade;
 use Illuminate\Support\Traits\Macroable;
 use RoundlyConsulting\MediaLibrary\Models\Media;
+use RoundlyConsulting\MediaLibrary\Support\MediaModel;
 use RoundlyConsulting\Reviews\Actions\ApproveReview;
 use RoundlyConsulting\Reviews\Actions\DeleteReview;
 use RoundlyConsulting\Reviews\Actions\RejectReview;
@@ -21,6 +22,7 @@ use RoundlyConsulting\Reviews\DataTransferObjects\UpdateReviewData;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Models\ReviewVote;
 use RoundlyConsulting\Reviews\Support\PendingReview;
+use RoundlyConsulting\Reviews\Support\ReviewModel;
 use RoundlyConsulting\Reviews\Testing\ReviewsFake;
 
 class Reviews
@@ -161,20 +163,16 @@ class Reviews
             return null;
         }
 
-        /** @var class-string<Review> $reviewModel */
-        $reviewModel = config('reviews.model', Review::class);
-
-        /** @var class-string<Media> $mediaModel */
-        $mediaModel = config('media.media_model', Media::class);
+        $review = ReviewModel::new();
 
         $bucket = config('reviews.photos.bucket', 'photos');
         $bucket = is_string($bucket) && $bucket !== '' ? $bucket : 'photos';
 
-        $reviewIds = $this->approvedQueryFor($reviewable)->pluck((new $reviewModel)->getKeyName());
+        $reviewIds = $this->approvedQueryFor($reviewable)->pluck($review->getKeyName());
 
-        return $mediaModel::query()
+        return MediaModel::query()
             ->where('bucket_name', $bucket)
-            ->where('model_type', (new $reviewModel)->getMorphClass())
+            ->where('model_type', $review->getMorphClass())
             ->whereIn('model_id', $reviewIds);
     }
 
@@ -183,9 +181,6 @@ class Reviews
      */
     protected function approvedQueryFor(Model $reviewable): Builder
     {
-        /** @var class-string<Review> $model */
-        $model = config('reviews.model', Review::class);
-
-        return $model::query()->topLevel()->approved()->for($reviewable);
+        return ReviewModel::query()->topLevel()->approved()->for($reviewable);
     }
 }
