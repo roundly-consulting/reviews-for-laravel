@@ -20,6 +20,17 @@ use RoundlyConsulting\PackageToolkit\Support\MigrationPublisher;
  */
 const MIGRATIONS_DIR = __DIR__.'/../../database/migrations';
 
+/**
+ * Non-literal `->constrained()` arguments, mapped to the table they resolve to under the packaged
+ * default config — the same shape as testing-for-laravel's `tableResolvers`. A migration resolves
+ * its parent from the model seam so a swapped `reviews.model` is honoured; the parse below still
+ * has to know what that lands on, and an unmapped expression fails loudly rather than silently
+ * dropping an edge from the order check.
+ */
+const TABLE_RESOLVERS = [
+    'ReviewModel::table()' => 'reviews',
+];
+
 /** @return list<string> The package's `.php` migration sources, in publish (= run) order. */
 function migrationSources(): array
 {
@@ -47,9 +58,9 @@ function alteredTable(string $source): ?string
 }
 
 /**
- * Every foreign-key parent a migration source references, in all three of the forms Laravel
- * accepts: `->constrained('parent')`, a bare `->constrained()` (parent derived from the column
- * name), and the long-hand `->references('id')->on('parent')`.
+ * Every foreign-key parent a migration source references, in all four of the forms Laravel
+ * accepts: `->constrained('parent')`, `->constrained(Resolver::table())`, a bare `->constrained()`
+ * (parent derived from the column name), and the long-hand `->references('id')->on('parent')`.
  *
  * @return list<string>
  */
@@ -60,6 +71,18 @@ function foreignKeyParents(string $source): array
 
     preg_match_all("/->constrained\(\s*'([a-z_]+)'/", $body, $explicit);
     $parents = [...$parents, ...$explicit[1]];
+
+    preg_match_all('/->constrained\(\s*(\w+::\w+\(\))\s*\)/', $body, $resolved);
+
+    foreach ($resolved[1] as $expression) {
+        expect(array_key_exists($expression, TABLE_RESOLVERS))->toBeTrue(sprintf(
+            '%s constrains against "%s", which TABLE_RESOLVERS does not map to a table.',
+            basename($source),
+            $expression,
+        ));
+
+        $parents[] = TABLE_RESOLVERS[$expression];
+    }
 
     preg_match_all("/->on\(\s*'([a-z_]+)'\s*\)/", $body, $longhand);
     $parents = [...$parents, ...$longhand[1]];

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use RoundlyConsulting\Reviews\Support\ReviewModel;
 
 return new class extends Migration
 {
@@ -13,7 +14,10 @@ return new class extends Migration
         Schema::create('review_votes', function (Blueprint $table): void {
             $table->id();
 
-            $table->foreignId('review_id')->constrained('reviews')->cascadeOnDelete();
+            // Resolved from `reviews.model`, not hard-coded: a host that swaps in its own model on
+            // its own table needs the constraint to target that table, or its votes can never
+            // satisfy it on any engine that enforces foreign keys.
+            $table->foreignId('review_id')->constrained(ReviewModel::table())->cascadeOnDelete();
             $table->nullableMorphs('voter');
 
             // true = helpful, false = unhelpful.

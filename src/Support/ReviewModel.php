@@ -42,6 +42,17 @@ final class ReviewModel
         return new $class;
     }
 
+    /**
+     * The table the configured review model lives on.
+     *
+     * Migrations constrain against this rather than a literal `reviews`, so a host that swaps in a
+     * model on its own table gets a foreign key that its rows can actually satisfy.
+     */
+    public static function table(): string
+    {
+        return self::new()->getTable();
+    }
+
     /** @return Builder<Review> */
     public static function query(): Builder
     {
