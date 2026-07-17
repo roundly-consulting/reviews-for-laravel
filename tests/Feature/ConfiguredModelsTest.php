@@ -11,7 +11,6 @@ use RoundlyConsulting\Reviews\Support\ReviewVoteModel;
 use RoundlyConsulting\Reviews\Tests\Member;
 use RoundlyConsulting\Reviews\Tests\Product;
 use RoundlyConsulting\Reviews\Tests\TenantReview;
-use RoundlyConsulting\Reviews\Tests\Voter;
 
 /**
  * `reviews.model` / `reviews.vote_model` are a documented swap seam. A host that points them at
@@ -43,10 +42,9 @@ it('writes, reads and aggregates through the configured model', function (): voi
         ->and($author->hasReviewed($product))->toBeTrue();
 });
 
-it('responds and votes through the configured models', function (): void {
+it('responds through the configured model', function (): void {
     $product = Product::create();
     $author = Member::create();
-    $voter = Voter::create();
 
     $review = $product->addReview($author)->rating(3)->content('Fine.')->create();
 
@@ -54,18 +52,28 @@ it('responds and votes through the configured models', function (): void {
 
     expect($response)->toBeInstanceOf(TenantReview::class)
         ->and($response->parent_id)->toBe($review->getKey());
-
-    $vote = app(Reviews::class)->vote($review, $voter);
-
-    expect($vote)->toBeInstanceOf(ReviewVote::class)
-        ->and($vote->review)->toBeInstanceOf(TenantReview::class)
-        ->and($review->fresh()?->helpful_count)->toBe(1)
-        ->and($voter->hasVotedOn($review))->toBeTrue();
-
-    app(Reviews::class)->removeVote($review, $voter);
-
-    expect($review->fresh()?->helpful_count)->toBe(0);
 });
+
+/*
+ * The VOTING half of this case used to live here and has moved to tests/SwappedModel/ —
+ * this note is the finding, not a relocation.
+ *
+ * It voted on a review of the body-time-swapped model and passed. It could only ever pass:
+ * the swap lands AFTER the package's migrations have run, so `review_votes.review_id` still
+ * constrains onto `reviews` while the review itself is a row in `tenant_reviews`. The vote
+ * referenced a parent that, by construction, did not exist in the parent table — and the
+ * suite reported green because this package's hand-written connection config omitted
+ * `foreign_key_constraints`, leaving SQLite's `PRAGMA foreign_keys` OFF. Adopting
+ * PackageTestCase turns it on and the case reds instantly with `FOREIGN KEY constraint
+ * failed`.
+ *
+ * So it was not merely a swap test that could not see the bug it was named for (the shape
+ * the fleet already knew about). It was a test asserting a state **no host can reach**,
+ * held up by a missing pragma. The real thing it claimed to prove — that a host's votes work
+ * against a swapped review model — needs the swap in place before the migrations run, which
+ * is what SwappedModelTestCase gives it, and it is proven there against an engine that
+ * enforces the constraint.
+ */
 
 it('resolves the packaged models by default', function (): void {
     config()->set('reviews.model', Review::class);

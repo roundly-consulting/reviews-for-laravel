@@ -39,6 +39,28 @@ it('stores a vote on a review of the configured model', function (): void {
         ->and($review->fresh()?->helpful_count)->toBe(1);
 });
 
+/**
+ * Moved here from tests/Feature/ConfiguredModelsTest.php, where the same flow ran under a
+ * BODY-time swap and could only pass with foreign keys off: the FK still targeted `reviews`
+ * while the review row lived in `tenant_reviews`. Voting is only meaningful from the state a
+ * host actually produces - the swap in config, before the migrations run - which is this
+ * base case.
+ */
+it('tallies and untallies a vote through the configured models', function (): void {
+    $review = Product::create()->addReview(Member::create())->rating(3)->content('Fine.')->create();
+    $voter = Voter::create();
+
+    app(Reviews::class)->vote($review, $voter);
+
+    expect($review->fresh()?->helpful_count)->toBe(1)
+        ->and($voter->hasVotedOn($review))->toBeTrue();
+
+    app(Reviews::class)->removeVote($review, $voter);
+
+    expect($review->fresh()?->helpful_count)->toBe(0)
+        ->and($voter->hasVotedOn($review))->toBeFalse();
+});
+
 it('cascades votes away when the configured model row is deleted', function (): void {
     $review = Product::create()->addReview(Member::create())->rating(2)->content('Meh.')->create();
 

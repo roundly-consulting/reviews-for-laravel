@@ -7,6 +7,7 @@ namespace RoundlyConsulting\Reviews\Tests;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use RoundlyConsulting\Reviews\Models\Review;
+use RoundlyConsulting\Testing\Fixtures\Concerns\CountsCreations;
 
 /**
  * A host's own review model on its own table — the swap `config/reviews.php` explicitly invites
@@ -14,6 +15,14 @@ use RoundlyConsulting\Reviews\Models\Review;
  */
 class TenantReview extends Review
 {
+    /**
+     * Not decoration: without it `toHonourModelSwap` silently drops its strongest half.
+     * Asserting the concrete class of a *returned* object cannot tell a row really created
+     * as TenantReview from one created as the packaged Review and re-hydrated
+     * (permissions #31) - counting `created` events on this exact class is the only oracle.
+     */
+    use CountsCreations;
+
     protected $table = 'tenant_reviews';
 
     /** The host's schema for the table this model lives on. */

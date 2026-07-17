@@ -4,53 +4,70 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Reviews\Tests;
 
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Schema;
-use Orchestra\Testbench\TestCase as Orchestra;
+use Illuminate\Support\ServiceProvider;
 use RoundlyConsulting\Reviews\ReviewsServiceProvider;
 
 /**
- * A host that swaps `reviews.model` does it in `config/reviews.php` — so the swap is in place
- * BEFORE the package's migrations run, not after (as the in-test `config()->set()` swaps do).
+ * A host that swaps `reviews.model` does it in `config/reviews.php` — so the swap is in
+ * place BEFORE the package's migrations run, not after (as an in-test `config()->set()`
+ * swap is). That ordering is the whole point of this base case: `0002_create_review_votes`
+ * resolves its foreign-key parent from the seam at migrate time, so a body-time swap
+ * cannot see a bug in it.
  *
- * Foreign keys are enforced here, as they are on every engine a host actually deploys on.
+ * `defineEnvironment()` is deliberately NOT overridden. PackageTestCase does its whole job
+ * there — `DriverMatrix::configure()` + `configBeforeBoot()` + the model swaps — so an
+ * override without `parent::` decapitates the base case silently: no error, no red,
+ * DriverMatrix simply never configured and the pgsql leg quietly running sqlite. This class
+ * previously extended Orchestra directly and hand-wrote its own environment, which is how
+ * it came to be the only suite in the package with `foreign_key_constraints` set at all.
  */
-abstract class SwappedModelTestCase extends Orchestra
+abstract class SwappedModelTestCase extends TestCase
 {
-    use RefreshDatabase;
-
-    /** @return array<int, class-string> */
-    protected function getPackageProviders($app): array
+    /**
+     * Media-library is deliberately absent, matching what this case has always registered:
+     * `reviews.photos.enabled` is off below, so the photo bucket never resolves and the
+     * provider is dead weight here.
+     *
+     * @return list<class-string<ServiceProvider>>
+     */
+    protected function packageProviders(): array
     {
         return [ReviewsServiceProvider::class];
     }
 
-    protected function defineEnvironment($app): void
+    /**
+     * The host's own table exists before the package's migrations run — the ordering a real
+     * install has, and the only ordering under which `0002_create_review_votes_table` can
+     * resolve its parent through the seam.
+     *
+     * It was a `TenantReview::createTable()` call in a hand-rolled
+     * `defineDatabaseMigrations()`; as a fixture migration it now runs through the migrator
+     * and is dropped and rebuilt by the base case's reset like every other table.
+     *
+     * @return list<class-string<ServiceProvider>|string>
+     */
+    protected function migrationSources(): array
     {
-        $app['config']->set('database.default', 'testing');
-        $app['config']->set('database.connections.testing', [
-            'driver' => 'sqlite',
-            'database' => ':memory:',
-            'prefix' => '',
-            // Laravel's SQLite connector leaves PRAGMA foreign_keys OFF unless this is set, which is
-            // why the rest of the suite never noticed a foreign key pointing at the wrong table.
-            'foreign_key_constraints' => true,
-        ]);
-
-        $app['config']->set('reviews.model', TenantReview::class);
-        $app['config']->set('reviews.photos.enabled', false);
+        return [
+            __DIR__.'/database/host-migrations',
+            ReviewsServiceProvider::class,
+            __DIR__.'/database/migrations',
+        ];
     }
 
-    protected function defineDatabaseMigrations(): void
+    /**
+     * Note `array_merge(parent::configBeforeBoot(), …)`: dropping it would silently discard
+     * the base case's media wiring — the same decapitation an un-parented
+     * `defineEnvironment()` causes one level up.
+     *
+     * @return array<string, mixed>
+     */
+    protected function configBeforeBoot(): array
     {
-        // The host's own table exists before the package's migrations run.
-        TenantReview::createTable();
-
-        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
-
-        Schema::create('entities', function (Blueprint $table): void {
-            $table->id();
-        });
+        return array_merge(parent::configBeforeBoot(), [
+            'reviews.model' => TenantReview::class,
+            'reviews.vote_model' => TenantVote::class,
+            'reviews.photos.enabled' => false,
+        ]);
     }
 }

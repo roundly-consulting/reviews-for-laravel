@@ -5,9 +5,19 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Artisan;
 
 /**
- * `php artisan about --only=reviews` reports switches, bounds and presence — never the moderation
- * blocklist itself (printing it hands anyone reading the output the exact word list the filter
- * screens for) and never the photos disk by name.
+ * A — the secret-safe `about` capture.
+ *
+ * `php artisan about --only=reviews` reports switches, bounds and presence — never the
+ * moderation blocklist itself (printing it hands anyone reading the output the exact word
+ * list the filter screens for) and never the photos disk by name.
+ *
+ * The local `aboutOutput()` helper this file carried was already non-vacuous: it went
+ * through `Artisan::call()` + `Artisan::output()`, not `app(Kernel::class)->output()` —
+ * the `''` that made purchases #13's entire leak check pass against empty output. The
+ * preset is adopted anyway because it makes that ordering structural rather than a habit:
+ * `mustRender` is required and non-empty, and the capture is asserted non-empty and proven
+ * to have rendered *before* any secret is looked for. A negative-only case cannot be
+ * written with it.
  */
 function aboutOutput(): string
 {
@@ -16,37 +26,34 @@ function aboutOutput(): string
     return Artisan::output();
 }
 
-it('contributes a reviews section to about', function (): void {
-    $rendered = aboutOutput();
-
-    expect($rendered)->toContain('Review model')
-        ->and($rendered)->toContain('Rating scale')
-        ->and($rendered)->toContain('1-5')
-        ->and($rendered)->toContain('Cached aggregates')
-        ->and($rendered)->toContain('Photos');
-});
-
-it('reports the moderation blocklist as a count, never the terms', function (): void {
+it('reports the moderation blocklist and photo disk without leaking either', function (): void {
     config()->set('reviews.moderation.banned_words', ['scandalous', 'unspeakable']);
-
-    $rendered = aboutOutput();
-
-    // Assert the capture is non-empty FIRST — an empty capture turns every negative below into a
-    // vacuous pass (the purchases near-miss).
-    expect($rendered)->toContain('Banned words')
-        ->and($rendered)->toContain('2 term(s)')
-        ->and($rendered)->not->toContain('scandalous')
-        ->and($rendered)->not->toContain('unspeakable');
-});
-
-it('reports the photos disk as presence, never by name', function (): void {
     config()->set('reviews.photos.disk', 'super-secret-bucket');
 
-    $rendered = aboutOutput();
-
-    expect($rendered)->toContain('Photo disk')
-        ->and($rendered)->toContain('SET')
-        ->and($rendered)->not->toContain('super-secret-bucket');
+    expect('reviews')->toLeakNoSecrets(
+        secrets: [
+            // The blocklist is the host's moderation policy: printing a term hands a reader
+            // the exact word the filter screens for. Reported by count only.
+            'scandalous',
+            'unspeakable',
+            // A disk name is host infrastructure. Reported by presence only.
+            'super-secret-bucket',
+        ],
+        mustRender: [
+            'Review model',
+            'Rating scale',
+            '1-5',
+            'Cached aggregates',
+            'Photos',
+            'Banned words',
+            'Photo disk',
+            // The positive halves that prove the lines report rather than sit empty: the
+            // count itself, and the presence marker. Without these the secret checks above
+            // would be aimed at a section that might have printed nothing at all.
+            '2 term(s)',
+            'SET',
+        ],
+    );
 });
 
 it('reports an unset photos disk as the default', function (): void {

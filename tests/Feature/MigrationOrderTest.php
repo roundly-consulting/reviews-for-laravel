@@ -2,223 +2,145 @@
 
 declare(strict_types=1);
 
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-use RoundlyConsulting\PackageToolkit\Support\MigrationPublisher;
+use RoundlyConsulting\PackageToolkit\Enums\DatabaseDriver;
+use RoundlyConsulting\Reviews\Enums\ReviewStatus;
+use RoundlyConsulting\Reviews\Reviews;
+use RoundlyConsulting\Reviews\ReviewsServiceProvider;
+use RoundlyConsulting\Reviews\Tests\Member;
+use RoundlyConsulting\Reviews\Tests\Product;
+use RoundlyConsulting\Reviews\Tests\Voter;
+use RoundlyConsulting\Testing\Database\DriverMatrix;
 
 /**
- * The package's migrations are publish-only: the host publishes them and runs `php artisan
- * migrate`, so the DIRECTORY SORT ORDER of `database/migrations` *is* the order they run in.
+ * M + P + R for the two review tables.
  *
- * `review_votes.review_id` carries a real foreign key onto `reviews`, so votes must be created
- * after reviews. It was not: the directory sorted `create_review_votes_table.php` first, and a
- * fresh install died on PostgreSQL/MySQL with `relation "reviews" does not exist`. SQLite silently
- * accepts a CREATE TABLE that references a missing parent, which is why the whole suite stayed
- * green over an install nobody could perform.
+ * This file replaces ~200 lines of hand-rolled reinvention: the suite carried its own
+ * migration globber, its own `Schema::create` regex scraper, its own four-form FK-edge
+ * walker, its own ALTER placement check and its own publish-and-migrate case. The ideas
+ * were right — it even pinned the edge count at 2 so the parse could not go vacuous, and it
+ * invented `TABLE_RESOLVERS` independently. That is exactly why it should be the shared
+ * implementation rather than this package's copy of it.
+ *
+ * Its publish-and-migrate case also ran against a throwaway **SQLite** file, which is the
+ * engine that cannot fail an ordering check: it happily creates a table whose foreign key
+ * names a missing parent and only complains at insert time. That is how five packages
+ * shipped uninstallable migration orders under green suites — and how this package shipped
+ * one (`create_review_votes_table` sorted before `create_reviews_table`; a fresh install
+ * died on Postgres with `relation "reviews" does not exist`).
  */
-const MIGRATIONS_DIR = __DIR__.'/../../database/migrations';
+$migrations = __DIR__.'/../../database/migrations';
 
 /**
- * Non-literal `->constrained()` arguments, mapped to the table they resolve to under the packaged
- * default config — the same shape as testing-for-laravel's `tableResolvers`. A migration resolves
- * its parent from the model seam so a swapped `reviews.model` is honoured; the parse below still
- * has to know what that lands on, and an unmapped expression fails loudly rather than silently
- * dropping an edge from the order check.
+ * The non-literal `->constrained()` argument, mapped to the table it resolves to under the
+ * packaged default config. `0002_create_review_votes_table` resolves its parent through
+ * `ReviewModel::table()` so a swapped `reviews.model` is honoured (the fix in 0a23fa8); the
+ * parse still has to know what that lands on. The resolver **never guesses on a non-literal**
+ * — an unmapped expression FAILS rather than silently dropping the edge, which is what keeps
+ * `foreignKeys: 2` honest instead of a number that passes over an empty parse.
  */
-const TABLE_RESOLVERS = [
+$tableResolvers = [
     'ReviewModel::table()' => 'reviews',
 ];
 
-/** @return list<string> The package's `.php` migration sources, in publish (= run) order. */
-function migrationSources(): array
-{
-    $files = glob(MIGRATIONS_DIR.'/*.php') ?: [];
-
-    sort($files);
-
-    return array_values($files);
-}
-
-/** The table a migration source creates, or null when it only alters. */
-function createdTable(string $source): ?string
-{
-    preg_match("/Schema::create\(\s*'([a-z_]+)'/", (string) file_get_contents($source), $m);
-
-    return $m[1] ?? null;
-}
-
-/** The table a migration source alters, or null when it creates. */
-function alteredTable(string $source): ?string
-{
-    preg_match("/Schema::table\(\s*'([a-z_]+)'/", (string) file_get_contents($source), $m);
-
-    return $m[1] ?? null;
-}
-
 /**
- * Every foreign-key parent a migration source references, in all four of the forms Laravel
- * accepts: `->constrained('parent')`, `->constrained(Resolver::table())`, a bare `->constrained()`
- * (parent derived from the column name), and the long-hand `->references('id')->on('parent')`.
+ * M — the structural, engine-independent order pin.
  *
- * @return list<string>
+ * Publish order IS run order (directory sort), so a migration that constrains onto a table
+ * an earlier one has not created yet is uninstallable in a host.
+ *
+ * `foreignKeys: 2` pins the edge count: `reviews.parent_id` → reviews (the self-referential
+ * owner-response link) and `review_votes.review_id` → the configured review table. The
+ * `reviewable`, `author` and `voter` columns are deliberately unconstrained morphs — a
+ * subject or an author can live in any table.
  */
-function foreignKeyParents(string $source): array
-{
-    $body = (string) file_get_contents($source);
-    $parents = [];
-
-    preg_match_all("/->constrained\(\s*'([a-z_]+)'/", $body, $explicit);
-    $parents = [...$parents, ...$explicit[1]];
-
-    preg_match_all('/->constrained\(\s*(\w+::\w+\(\))\s*\)/', $body, $resolved);
-
-    foreach ($resolved[1] as $expression) {
-        expect(array_key_exists($expression, TABLE_RESOLVERS))->toBeTrue(sprintf(
-            '%s constrains against "%s", which TABLE_RESOLVERS does not map to a table.',
-            basename($source),
-            $expression,
-        ));
-
-        $parents[] = TABLE_RESOLVERS[$expression];
-    }
-
-    preg_match_all("/->on\(\s*'([a-z_]+)'\s*\)/", $body, $longhand);
-    $parents = [...$parents, ...$longhand[1]];
-
-    // A bare `->constrained()` derives the parent table from the column name: `review_id` → `reviews`.
-    preg_match_all("/->foreign(?:Id|Uuid|Ulid)\(\s*'([a-z_]+)'\s*\)((?:(?!;).)*)/s", $body, $columns, PREG_SET_ORDER);
-
-    foreach ($columns as [, $column, $chain]) {
-        if (preg_match('/->constrained\(\s*\)/', $chain) === 1) {
-            $parents[] = Str::plural(Str::beforeLast($column, '_id'));
-        }
-    }
-
-    return array_values(array_unique($parents));
-}
-
-it('sorts every foreign key target before the migration that references it', function (): void {
-    $sources = migrationSources();
-    $creates = [];
-
-    foreach ($sources as $index => $source) {
-        $table = createdTable($source);
-
-        if ($table !== null) {
-            $creates[$table] = $index;
-        }
-    }
-
-    $edges = 0;
-
-    foreach ($sources as $index => $source) {
-        foreach (foreignKeyParents($source) as $parent) {
-            $edges++;
-
-            expect(array_key_exists($parent, $creates))->toBeTrue(sprintf(
-                '%s references "%s", which no migration creates.',
-                basename($source),
-                $parent,
-            ));
-
-            // A self-referencing key sorts with its own file; every other parent must sort strictly first.
-            $limit = createdTable($source) === $parent ? $index : $index - 1;
-
-            expect($creates[$parent])->toBeLessThanOrEqual($limit, sprintf(
-                '%s (position %d) references "%s", created at position %d.',
-                basename($source),
-                $index,
-                $parent,
-                $creates[$parent],
-            ));
-        }
-    }
-
-    // The engine-independent pin above is the ONLY check that catches a bad order on SQLite, so it
-    // must never pass because it found no edges to check.
-    expect($edges)->toBe(2);
+it('has a runnable migration order', function () use ($migrations, $tableResolvers): void {
+    expect($migrations)->toHaveRunnableMigrationOrder(
+        foreignKeys: 2,
+        tableResolvers: $tableResolvers,
+    );
 });
 
-it('sorts every alter after the migration that creates its table', function (): void {
-    $sources = migrationSources();
-    $creates = [];
+/**
+ * P — the publish-only guards. The fleet publishes migrations timestamped rather than
+ * auto-loading them; doing both runs both copies and dies on a duplicate table (bug #5, on
+ * three packages). `count: 2` pins the file count so neither check can pass over an empty or
+ * relocated directory.
+ *
+ * The bespoke publish cases in tests/Feature/Provider/PublishOnlyMigrationsTest.php are
+ * kept: the aggregate stub's separate opt-in tag and the "every scripted tag still exists"
+ * pin have no preset equivalent.
+ */
+it('never auto-loads its migrations — the host publishes them', function (): void {
+    expect(ReviewsServiceProvider::class)->toNotAutoLoadMigrations();
+});
 
-    foreach ($sources as $index => $source) {
-        $table = createdTable($source);
+it('publishes every migration timestamp-injected into the host', function (): void {
+    expect(ReviewsServiceProvider::class)->toPublishMigrationsTimestamped('reviews-migrations', 2);
+});
 
-        if ($table !== null) {
-            $creates[$table] = $index;
-        }
-    }
+/**
+ * R — the real-engine proof. The deleted local version ran the published files against a
+ * throwaway SQLite database, the one engine that cannot fail this class of check.
+ * `migrations: 2` pins the count, and the expectation additionally fails a set that "applies
+ * cleanly" while creating no tables — an empty `up()` otherwise passes and proves nothing.
+ */
+it('applies its migrations on postgres', function () use ($migrations): void {
+    expect($migrations)->toApplyOnConnection('pgsql', migrations: 2);
+})->skip(fn (): bool => ! test()->connectionAvailable('pgsql'), 'no postgres connection available');
 
-    foreach ($sources as $index => $source) {
-        $table = alteredTable($source);
+/**
+ * The negative control, adoptable here where it was not for requests or credits: this
+ * package has real FK edges, so a reversed order gives Postgres something to refuse. A green
+ * FK test proves nothing until you have watched the engine actually reject the broken order
+ * (forms #28). This fails loudly if the engine ACCEPTS the reordered set, which is what makes
+ * the positive half above meaningful — and it is the shape this package genuinely shipped.
+ */
+it('rejects a child-before-parent order on postgres', function () use ($migrations): void {
+    expect($migrations)->toRejectBrokenOrderOnConnection(
+        fn (array $files): array => array_reverse($files),
+        'pgsql',
+    );
+})->skip(fn (): bool => ! test()->connectionAvailable('pgsql'), 'no postgres connection available');
 
-        if ($table === null || ! isset($creates[$table])) {
-            continue;
-        }
+/**
+ * The driver-truth pin: compares the env-declared driver against what the connection itself
+ * answers, so a leg that exports the location vars but not `TESTING_DB_DRIVER` (or a TestCase
+ * that decapitates the base case by overriding `defineEnvironment()` without `parent::`) reds
+ * instead of quietly running sqlite and reporting green as a "postgres" job. Strictly stronger
+ * than reading a skip count by hand.
+ */
+it('runs on the driver the leg declares', function (): void {
+    expect(DatabaseDriver::current())->toBe(DatabaseDriver::from(DriverMatrix::driver()));
+});
 
-        expect($creates[$table])->toBeLessThan($index);
-    }
-})->throwsNoExceptions();
+/**
+ * The `meta` jsonb column, the enum-backed `status` and the unsigned tally columns are what
+ * the drivers render differently — `json` has no equality operator on Postgres at all.
+ * Pinning a round-trip on whatever engine the leg configured proves the columns are usable
+ * rather than merely creatable.
+ */
+it('round-trips a review and its vote on the configured engine', function (): void {
+    $review = Product::create()
+        ->addReview(Member::create())
+        ->rating(4)
+        ->title('Solid')
+        ->content('Good value.')
+        ->meta(['tier' => 2, 'region' => 'eu'])
+        ->create();
 
-it('migrates the published files into a fresh empty database', function (): void {
-    $directory = sys_get_temp_dir().'/reviews-publish-'.Str::random(8);
-    mkdir($directory);
+    app(Reviews::class)->vote($review, Voter::create());
 
-    // Copy each source to the filename the toolkit publishes it under: one timestamp base,
-    // +1s per file, in directory order.
-    $timestamp = Carbon::now();
-    $offset = 0;
+    $fresh = $review->fresh();
 
-    foreach (migrationSources() as $source) {
-        copy($source, MigrationPublisher::destination(
-            MigrationPublisher::nameFor($source),
-            $directory,
-            $timestamp->copy()->addSeconds($offset++),
-        ));
-    }
-
-    $database = $directory.'/host.sqlite';
-    touch($database);
-
-    config()->set('database.connections.host', [
-        'driver' => 'sqlite',
-        'database' => $database,
-        'prefix' => '',
-        'foreign_key_constraints' => true,
-    ]);
-
-    Artisan::call('migrate', [
-        '--database' => 'host',
-        '--path' => $directory,
-        '--realpath' => true,
-    ]);
-
-    $connection = DB::connection('host');
-
-    expect($connection->getSchemaBuilder()->hasTable('reviews'))->toBeTrue()
-        ->and($connection->getSchemaBuilder()->hasTable('review_votes'))->toBeTrue();
-
-    // The foreign keys really are emitted, so the CREATE order above is load-bearing.
-    $votesKeys = $connection->select('pragma foreign_key_list(review_votes)');
-    $reviewKeys = $connection->select('pragma foreign_key_list(reviews)');
-
-    expect(array_map(static fn (object $key): string => (string) $key->table, $votesKeys))->toBe(['reviews'])
-        ->and(array_map(static fn (object $key): string => (string) $key->table, $reviewKeys))->toBe(['reviews']);
-
-    // And the published timestamps preserve the dependency order.
-    $published = glob($directory.'/*.php') ?: [];
-    sort($published);
-
-    expect(array_map(
-        static fn (string $file): string => MigrationPublisher::nameFor($file),
-        $published,
-    ))->toBe(['0001_create_reviews_table', '0002_create_review_votes_table']);
-
-    $connection->disconnect();
-    array_map(unlink(...), glob($directory.'/*') ?: []);
-    rmdir($directory);
+    expect($fresh?->status)->toBe(ReviewStatus::Pending)
+        ->and($fresh?->rating)->toBe(4)
+        ->and($fresh?->title)->toBe('Solid')
+        ->and($fresh?->helpful_count)->toBe(1)
+        // Key-by-key rather than `toBe` on the whole map: jsonb sorts object keys (by
+        // length, then bytewise), so `['tier' => 2, 'region' => 'eu']` comes back reordered
+        // and a whole-map `toBe` (`===`, order-sensitive) would red on Postgres while
+        // passing on sqlite. `toEqual` would hide the opposite bug — it is `==`, so it would
+        // accept the string "2" for the int 2, which is what a round-trip pin exists to catch.
+        ->and($fresh?->meta['tier'] ?? null)->toBe(2)
+        ->and($fresh?->meta['region'] ?? null)->toBe('eu');
 });
