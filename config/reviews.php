@@ -26,6 +26,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Key Type
+    |--------------------------------------------------------------------------
+    |
+    | The key type used for the polymorphic reviewable / author / voter columns.
+    | Use "uuid" or "ulid" when the models those columns point at use UUID/ULID
+    | primary keys, otherwise leave it as "bigint". Your morph targets must share
+    | one key type; set this to match. Any unrecognized value falls back to
+    | "bigint".
+    |
+    | Supported: "bigint", "uuid", "ulid"
+    |
+    */
+
+    'key_type' => env('REVIEWS_KEY_TYPE', 'bigint'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Rating Scale
     |--------------------------------------------------------------------------
     |

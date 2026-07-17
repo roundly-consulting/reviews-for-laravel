@@ -5,20 +5,23 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use RoundlyConsulting\PackageToolkit\Enums\KeyType;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('reviews', function (Blueprint $table): void {
+        $keyType = KeyType::fromConfig('reviews.key_type');
+
+        Schema::create('reviews', function (Blueprint $table) use ($keyType): void {
             $table->id();
 
             // Self-referential parent for owner responses/replies: a response is
             // itself a review row tied to a parent review.
             $table->foreignId('parent_id')->nullable()->constrained('reviews')->nullOnDelete();
 
-            $table->nullableMorphs('reviewable');
-            $table->nullableMorphs('author');
+            $table->morphKey('reviewable', $keyType, nullable: true);
+            $table->morphKey('author', $keyType, nullable: true);
 
             // Stored as an integer so decimal/half-star input can be layered on
             // later (a wider column type) without a breaking change. Null = a
