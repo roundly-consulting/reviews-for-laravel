@@ -32,7 +32,7 @@ return new class extends Migration
             $table->string('title')->nullable();
             // Nullable so a pure star rating (no text) is allowed.
             $table->text('content')->nullable();
-            $table->json('meta')->nullable();
+            $table->jsonb('meta')->nullable();
 
             // Denormalized helpful-vote tallies maintained on vote changes.
             $table->unsignedInteger('helpful_count')->default(0);
