@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Reviews;
 
 use Illuminate\Support\Facades\Event;
+use RoundlyConsulting\PackageToolkit\Concerns\RegistersBlueprintMacros;
 use RoundlyConsulting\PackageToolkit\Package;
 use RoundlyConsulting\PackageToolkit\PackageServiceProvider;
 use RoundlyConsulting\Reviews\Commands\RecountReviewsCommand;
@@ -21,6 +22,8 @@ use RoundlyConsulting\Reviews\Support\ReviewVoteModel;
 
 final class ReviewsServiceProvider extends PackageServiceProvider
 {
+    use RegistersBlueprintMacros;
+
     public function configurePackage(Package $package): void
     {
         $package
@@ -61,6 +64,10 @@ final class ReviewsServiceProvider extends PackageServiceProvider
     public function boot(): void
     {
         parent::boot();
+
+        // The migrations' key-type-aware morph columns are macros, so they must
+        // exist before a host runs `php artisan migrate`.
+        $this->registerBlueprintMacros();
 
         if ((bool) config('reviews.cache_aggregates', false)) {
             ReviewModel::class()::observe(ReviewAggregateObserver::class);
