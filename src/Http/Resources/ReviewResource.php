@@ -64,8 +64,9 @@ final class ReviewResource extends JsonResource
         foreach ($review->photos() as $media) {
             $photos[] = [
                 'id' => $media->getKey(),
-                'url' => $media->getUrl(),
-                'srcset' => $media->srcset(),
+                // Signed for a private photo, never its public URL.
+                'url' => $review->resolvePhotoUrl($media),
+                'srcset' => $review->photoSrcset($media),
             ];
         }
 

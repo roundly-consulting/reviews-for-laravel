@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use RoundlyConsulting\MediaLibrary\Concerns\InteractsWithMedia;
 use RoundlyConsulting\MediaLibrary\Models\Media;
+use RoundlyConsulting\MediaLibrary\Variants\ResponsiveImageGenerator;
 
 /**
  * First-class review photos for the bundled Review model, built on
@@ -19,6 +20,10 @@ use RoundlyConsulting\MediaLibrary\Models\Media;
  * media-library's `InteractsWithMedia` seam and adds review-specific readers. The whole
  * feature is gated by `reviews.photos.enabled`: when disabled the bucket is never declared
  * and the model behaves as if it carries no media.
+ *
+ * With `reviews.photos.visibility = private` every URL surface below resolves to short-lived
+ * signed URLs (never a public one), and the photos are stored on `reviews.photos.private_disk`
+ * unless `reviews.photos.disk` names a disk explicitly.
  *
  * @mixin Model
  */
@@ -51,6 +56,13 @@ trait HasReviewPhotos
 
         if (is_string($disk) && $disk !== '') {
             $bucket->useDisk($disk);
+        } elseif ($this->photosVisibility() === 'private') {
+            // A private photo must not land on media-library's default disk: that is the
+            // web-served `public` disk, where the file is reachable under /storage without the
+            // signed URL. Its variants follow it, whatever `media.variants_disk` says.
+            $privateDisk = $this->privatePhotosDisk();
+
+            $bucket->useDisk($privateDisk)->storingVariantsOnDisk($privateDisk);
         }
 
         $widths = config('reviews.photos.responsive_widths');
@@ -85,6 +97,7 @@ trait HasReviewPhotos
 
     /**
      * The URL of the review's first photo (optionally a variant), or the bucket fallback / '' .
+     * Resolved by visibility — see {@see self::resolvePhotoUrl()}.
      */
     public function firstPhotoUrl(string $variant = ''): string
     {
@@ -92,11 +105,16 @@ trait HasReviewPhotos
             return '';
         }
 
-        return $this->getFirstMediaUrl($this->photosBucket(), $variant);
+        $media = $this->getFirstMedia($this->photosBucket());
+
+        return $media === null
+            ? $this->getFirstMediaUrl($this->photosBucket(), $variant)
+            : $this->resolvePhotoUrl($media, $variant);
     }
 
     /**
-     * URLs for every photo on the review (optionally a variant), in order.
+     * URLs for every photo on the review (optionally a variant), in order, each resolved by
+     * visibility — see {@see self::resolvePhotoUrl()}.
      *
      * @return list<string>
      */
@@ -105,10 +123,37 @@ trait HasReviewPhotos
         $urls = [];
 
         foreach ($this->photos() as $media) {
-            $urls[] = $media->getUrl($variant);
+            $urls[] = $this->resolvePhotoUrl($media, $variant);
         }
 
         return $urls;
+    }
+
+    /**
+     * The URL to serve a photo at, chosen by the photo's own visibility: a public photo gets its
+     * public (CDN-rewritable) URL, a private one a short-lived signed URL (presigned on capable
+     * disks, otherwise media's signed streaming route). A private photo never gets a public URL.
+     */
+    public function resolvePhotoUrl(Media $media, string $variant = ''): string
+    {
+        return $media->isPrivate()
+            ? $media->getTemporaryUrl($this->photoUrlExpiry(), $variant)
+            : $media->getUrl($variant);
+    }
+
+    /**
+     * A photo's `srcset` (every generated responsive width, ascending), resolved by visibility.
+     */
+    public function photoSrcset(Media $media): string
+    {
+        if (! $media->isPrivate()) {
+            return $media->srcset();
+        }
+
+        return implode(', ', array_map(
+            fn (int $width): string => $this->resolvePhotoUrl($media, ResponsiveImageGenerator::variantName($width)).' '.$width.'w',
+            app(ResponsiveImageGenerator::class)->generatedWidths($media),
+        ));
     }
 
     /**
@@ -122,7 +167,9 @@ trait HasReviewPhotos
         $markup = [];
 
         foreach ($this->photos() as $media) {
-            $markup[] = $media->responsiveImage('', $attributes);
+            $markup[] = $media->isPrivate()
+                ? $this->privateResponsivePhoto($media, $attributes)
+                : $media->responsiveImage('', $attributes);
         }
 
         return $markup;
@@ -143,7 +190,7 @@ trait HasReviewPhotos
             return '';
         }
 
-        return $media->getTemporaryUrl($expiry ?? CarbonImmutable::now()->addMinutes(5), $variant);
+        return $media->getTemporaryUrl($expiry ?? $this->photoUrlExpiry(), $variant);
     }
 
     public function photosBucket(): string
@@ -158,6 +205,62 @@ trait HasReviewPhotos
         $visibility = config('reviews.photos.visibility', 'public');
 
         return $visibility === 'private' ? 'private' : 'public';
+    }
+
+    /**
+     * The same `<img>` media-library's `responsiveImage()` builds — smallest generated width as
+     * `src`, every width in `srcset`, `sizes` / `alt` / `class`, the LQIP placeholder — with
+     * signed URLs, since a private photo has no public one.
+     *
+     * @param  array<string, string>  $attributes
+     */
+    private function privateResponsivePhoto(Media $media, array $attributes): string
+    {
+        $widths = app(ResponsiveImageGenerator::class)->generatedWidths($media);
+
+        $pairs = [
+            'src' => $this->resolvePhotoUrl($media, $widths === [] ? '' : ResponsiveImageGenerator::variantName($widths[0])),
+        ];
+
+        $srcset = $this->photoSrcset($media);
+
+        if ($srcset !== '') {
+            $pairs['srcset'] = $srcset;
+        }
+
+        foreach (['sizes', 'alt', 'class'] as $name) {
+            if (isset($attributes[$name])) {
+                $pairs[$name] = $attributes[$name];
+            }
+        }
+
+        $placeholder = $media->placeholderDataUri();
+
+        if ($placeholder !== null) {
+            $pairs['style'] = "background-size:cover;background-image:url('{$placeholder}')";
+        }
+
+        $rendered = '';
+
+        foreach ($pairs as $name => $value) {
+            $rendered .= ' '.$name.'="'.e($value).'"';
+        }
+
+        return '<img'.$rendered.'>';
+    }
+
+    private function privatePhotosDisk(): string
+    {
+        $disk = config('reviews.photos.private_disk', 'local');
+
+        return is_string($disk) && $disk !== '' ? $disk : 'local';
+    }
+
+    private function photoUrlExpiry(): DateTimeInterface
+    {
+        $minutes = config('media.temporary_url_default_lifetime', 5);
+
+        return CarbonImmutable::now()->addMinutes(is_numeric($minutes) ? (int) $minutes : 5);
     }
 
     public static function reviewPhotosEnabled(): bool

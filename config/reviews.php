@@ -159,7 +159,13 @@ return [
     |
     |   enabled              Master switch for the photos feature.
     |   bucket               The media bucket name photos are stored in.
-    |   disk                 Storage disk (null uses the media-library default).
+    |   disk                 Storage disk for every photo. null = by visibility:
+    |                        private photos go to private_disk, public ones to
+    |                        the media-library default disk.
+    |   private_disk         Non-public disk for PRIVATE photos (and their
+    |                        variants) when disk is null. Never the web-served
+    |                        'public' disk: a private photo there is reachable
+    |                        under /storage without its signed URL.
     |   max                  Per-review photo limit (0 = unlimited); overflow
     |                        throws InvalidReviewException::tooManyPhotos().
     |   max_file_size        Largest accepted upload, in bytes.
@@ -178,6 +184,8 @@ return [
         'bucket' => env('REVIEWS_PHOTOS_BUCKET', 'photos'),
 
         'disk' => env('REVIEWS_PHOTOS_DISK'),
+
+        'private_disk' => env('REVIEWS_PHOTOS_PRIVATE_DISK', 'local'),
 
         'max' => (int) env('REVIEWS_PHOTOS_MAX', 5),
 

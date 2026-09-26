@@ -145,6 +145,7 @@ return [
         'enabled' => (bool) env('REVIEWS_PHOTOS_ENABLED', true),
         'bucket' => env('REVIEWS_PHOTOS_BUCKET', 'photos'),
         'disk' => env('REVIEWS_PHOTOS_DISK'),
+        'private_disk' => env('REVIEWS_PHOTOS_PRIVATE_DISK', 'local'),
         'max' => (int) env('REVIEWS_PHOTOS_MAX', 5),
         'max_file_size' => (int) env('REVIEWS_PHOTOS_MAX_FILE_SIZE', 5 * 1024 * 1024),
         'accepted_mime_types' => ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
@@ -172,7 +173,8 @@ return [
 | `cache_aggregates` | `bool` | `false` | `REVIEWS_CACHE_AGGREGATES` | Maintain cached `reviews_count` / `reviews_avg` on opted-in reviewables. |
 | `photos.enabled` | `bool` | `true` | `REVIEWS_PHOTOS_ENABLED` | Master switch for review photos; when `false`, `withPhoto()` throws and the bucket is never declared. |
 | `photos.bucket` | `string` | `photos` | `REVIEWS_PHOTOS_BUCKET` | The media bucket photos are stored in. |
-| `photos.disk` | `?string` | `null` | `REVIEWS_PHOTOS_DISK` | Storage disk (`null` uses the media-library default). |
+| `photos.disk` | `?string` | `null` | `REVIEWS_PHOTOS_DISK` | Storage disk for every photo. `null` = by visibility: private → `photos.private_disk`, public → media-library's default disk. |
+| `photos.private_disk` | `string` | `local` | `REVIEWS_PHOTOS_PRIVATE_DISK` | Non-public disk for private photos (and their variants) when `photos.disk` is `null`. |
 | `photos.max` | `int` | `5` | `REVIEWS_PHOTOS_MAX` | Per-review photo limit (`0` = unlimited); overflow throws `tooManyPhotos()`. |
 | `photos.max_file_size` | `int` | `5242880` | `REVIEWS_PHOTOS_MAX_FILE_SIZE` | Largest accepted upload, in bytes. |
 | `photos.accepted_mime_types` | `list<string>` | image types | — | Whitelisted photo mime types. |
@@ -276,8 +278,18 @@ $review->firstPhotoUrl();          // string ('' when empty)
 $review->firstPhotoUrl('thumb');   // a named responsive variant
 $review->photoUrls();              // list<string>
 $review->responsivePhotos(['class' => 'photo']); // list<string> of <img srcset="…">
-$review->firstPhotoTemporaryUrl(); // signed URL (useful for a private bucket)
+$review->resolvePhotoUrl($media);  // one photo's URL
+$review->photoSrcset($media);      // one photo's srcset
+$review->firstPhotoTemporaryUrl(); // always a signed URL
 ```
+
+Every reader resolves each photo by its visibility: public photos get their public (CDN-able)
+URLs, while with `photos.visibility = private` every URL — including `srcset` entries,
+`responsivePhotos()` and `ReviewResource` — is a short-lived signed URL, never a public one.
+Private photos (and their variants) are stored on `photos.private_disk` — Laravel's non-public
+`local` disk by default — never on media-library's web-served `public` disk, so the signed URL
+is the only way in. An explicit `photos.disk` is used for every photo, so keep it non-public
+while photos are private.
 
 The `photos` bucket is **public** by default, holds up to `photos.max` (default **5**) images,
 and produces responsive variants for the configured `responsive_widths`. Exceeding the limit
