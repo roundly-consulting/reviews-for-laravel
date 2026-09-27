@@ -1,23 +1,31 @@
 # Changelog
 
-All notable changes to `reviews-for-laravel` will be documented in this file.
+All notable changes to `reviews-for-laravel` are documented in this file. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
+[Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-### Fixed
+Initial public release.
 
-- With `photos.visibility = private` (a documented option), every photo URL surface —
-  `firstPhotoUrl()`, `photoUrls()`, `responsivePhotos()` and `ReviewResource`'s `url` / `srcset`
-  — asked media-library for public URLs, which it refuses for private media, so each threw
-  `MediaCannotBeStreamed`. They now resolve each photo by visibility (public URL for public,
-  short-lived signed URL for private) through the new `resolvePhotoUrl()` / `photoSrcset()`.
-  `firstPhotoTemporaryUrl()` now defaults to `media.temporary_url_default_lifetime` instead of a
-  hardcoded 5 minutes.
+### Added
 
-### Security
-
-- Private photos are now stored on a non-public disk by default: new `photos.private_disk`
-  (`REVIEWS_PHOTOS_PRIVATE_DISK`, default `local`) holds private originals and their variants
-  whenever `photos.disk` is unset. They used to land on media-library's default `public` disk —
-  served under `/storage` once `storage:link` runs — so a private photo was reachable without a
-  signed URL. The signed stream route serves them from the private disk.
+- Polymorphic reviews: any model can review any other, via the `CanReview` and `HasReviews` traits.
+- A fluent `Reviews` facade (`Reviews::for($product)->by($user)->rating(5)->content(...)->create()`)
+  with star ratings in a configurable range.
+- Review photos on `media-library-for-laravel`: `withPhoto()` / `withPhotos()` on the builder,
+  responsive variants, a per-review limit and signed URLs for private photos.
+- A moderation lifecycle (`Pending`, `Approved`, `Rejected`) with `Reviews::approve()` /
+  `reject()` and optional re-moderation after edits.
+- Pluggable auto-moderation through the `ReviewModerator` contract, with a bundled
+  `WordListModerator`.
+- Rating aggregates: `averageRating()`, `ratingDistribution()` and a `RatingSummary` DTO, plus
+  optional cached counters with `MaintainsReviewAggregates` and `reviews:recount`.
+- Verified-review flags, helpful / unhelpful votes (`Reviews::vote()`, `CanVoteOnReviews`) and
+  owner responses (`Reviews::respond()`).
+- Query scopes such as `approved()`, `minRating()`, `verified()`, `authoredBy()` and
+  `mostHelpful()`.
+- Events for every action: created, approved, rejected, updated, deleted, responded, voted and
+  vote removed.
+- A publishable `ReviewResource`, a `Macroable` manager for custom verbs, and `Reviews::fake()`
+  with assertions for tests.
