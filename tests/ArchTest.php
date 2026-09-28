@@ -5,8 +5,7 @@ declare(strict_types=1);
 use RoundlyConsulting\Reviews\Exceptions\ReviewException;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Models\ReviewVote;
-use RoundlyConsulting\Reviews\Reviews;
-use RoundlyConsulting\Reviews\Support\PendingReview;
+use RoundlyConsulting\Reviews\ReviewsManager;
 use RoundlyConsulting\Testing\Arch\ArchPresets;
 
 /**
@@ -31,12 +30,11 @@ ArchPresets::finalByDefault('RoundlyConsulting\Reviews', [
     Review::class,
     ReviewVote::class,
     ReviewException::class,
-    // The package extends both itself, for Reviews::fake(): Testing\ReviewsFake extends
-    // Reviews and Testing\RecordingPendingReview extends PendingReview. Real, in-tree
-    // extension points rather than oversights - and both are proven so by exemptionsExist,
-    // which the $ignoring parameter registers automatically.
-    Reviews::class,
-    PendingReview::class,
+    // The package extends it itself, for Reviews::fake(): Testing\ReviewsFake extends
+    // ReviewsManager so constructor-injected managers receive the fake. A real, in-tree
+    // extension point rather than an oversight - proven so by exemptionsExist, which the
+    // $ignoring parameter registers automatically.
+    ReviewsManager::class,
 ]);
 
 /**
@@ -90,6 +88,14 @@ ArchPresets::morphColumnsUseTheSeam(__DIR__.'/../database/migrations');
  * — never widen the allow-list to quiet it (bug #6 is a true positive).
  */
 ArchPresets::runtimeRequireIsWhitelisted(__DIR__.'/../composer.json');
+
+/**
+ * One path: the Review model, its scope/photo traits and the HasReviews / CanReview /
+ * CanVoteOnReviews / MaintainsReviewAggregates traits never reach an action directly — they
+ * delegate to ReviewsManager, so Reviews::fake() sees `$review->respond()`,
+ * `$review->markVerified()`, `$user->voteOn()` and `$product->addReview()` alike.
+ */
+ArchPresets::modelsGoThroughTheFacade('RoundlyConsulting\Reviews');
 
 /**
  * Replaces the package's entire previous arch file, which named three functions; the preset

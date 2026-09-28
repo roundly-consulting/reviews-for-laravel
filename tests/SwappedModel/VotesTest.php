@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use RoundlyConsulting\Reviews\Reviews;
+use RoundlyConsulting\Reviews\ReviewsManager;
 use RoundlyConsulting\Reviews\Support\ReviewModel;
 use RoundlyConsulting\Reviews\Tests\Member;
 use RoundlyConsulting\Reviews\Tests\Product;
@@ -33,7 +33,7 @@ it('stores a vote on a review of the configured model', function (): void {
     expect($review)->toBeInstanceOf(TenantReview::class)
         ->and($review->getTable())->toBe('tenant_reviews');
 
-    $vote = app(Reviews::class)->vote($review, Voter::create());
+    $vote = app(ReviewsManager::class)->vote($review, Voter::create());
 
     expect($vote->review_id)->toBe($review->getKey())
         ->and($review->fresh()?->helpful_count)->toBe(1);
@@ -50,12 +50,12 @@ it('tallies and untallies a vote through the configured models', function (): vo
     $review = Product::create()->addReview(Member::create())->rating(3)->content('Fine.')->create();
     $voter = Voter::create();
 
-    app(Reviews::class)->vote($review, $voter);
+    app(ReviewsManager::class)->vote($review, $voter);
 
     expect($review->fresh()?->helpful_count)->toBe(1)
         ->and($voter->hasVotedOn($review))->toBeTrue();
 
-    app(Reviews::class)->removeVote($review, $voter);
+    app(ReviewsManager::class)->removeVote($review, $voter);
 
     expect($review->fresh()?->helpful_count)->toBe(0)
         ->and($voter->hasVotedOn($review))->toBeFalse();
@@ -64,7 +64,7 @@ it('tallies and untallies a vote through the configured models', function (): vo
 it('cascades votes away when the configured model row is deleted', function (): void {
     $review = Product::create()->addReview(Member::create())->rating(2)->content('Meh.')->create();
 
-    app(Reviews::class)->vote($review, Voter::create());
+    app(ReviewsManager::class)->vote($review, Voter::create());
 
     $review->forceDelete();
 

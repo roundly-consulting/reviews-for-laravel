@@ -7,53 +7,39 @@ namespace RoundlyConsulting\Reviews\Support;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
-use RoundlyConsulting\Reviews\Actions\CreateReview;
 use RoundlyConsulting\Reviews\DataTransferObjects\CreateReviewData;
 use RoundlyConsulting\Reviews\Exceptions\InvalidReviewException;
 use RoundlyConsulting\Reviews\Models\Review;
+use RoundlyConsulting\Reviews\ReviewsManager;
 
 /**
- * Fluent builder for creating a review. Chain setters then call create().
+ * Fluent builder for one review — `Reviews::for($subject)->by($author)`. The subject and author
+ * are fixed when the builder is made; chain the optional setters, then `create()`, which hands a
+ * {@see CreateReviewData} to {@see ReviewsManager::create()} (so the fake records it).
  */
-class PendingReview
+final class PendingReview
 {
-    protected ?Model $reviewable = null;
+    private ?int $rating = null;
 
-    protected ?Model $author = null;
+    private ?string $title = null;
 
-    protected ?int $rating = null;
-
-    protected ?string $title = null;
-
-    protected ?string $content = null;
+    private ?string $content = null;
 
     /** @var Collection<string, mixed>|null */
-    protected ?Collection $meta = null;
+    private ?Collection $meta = null;
 
-    protected bool $approved = false;
+    private bool $approved = false;
 
-    protected bool $verified = false;
+    private bool $verified = false;
 
     /** @var list<PendingPhoto> */
-    protected array $photos = [];
+    private array $photos = [];
 
     public function __construct(
-        private readonly CreateReview $createReview = new CreateReview,
+        private readonly ReviewsManager $manager,
+        private readonly Model $reviewable,
+        private readonly Model $author,
     ) {}
-
-    public function for(Model $reviewable): self
-    {
-        $this->reviewable = $reviewable;
-
-        return $this;
-    }
-
-    public function by(Model $author): self
-    {
-        $this->author = $author;
-
-        return $this;
-    }
 
     public function rating(?int $rating): self
     {
@@ -158,9 +144,9 @@ class PendingReview
 
     public function create(): Review
     {
-        return $this->createReview->execute(new CreateReviewData(
-            author: $this->resolveAuthor(),
-            reviewable: $this->resolveReviewable(),
+        return $this->manager->create(new CreateReviewData(
+            author: $this->author,
+            reviewable: $this->reviewable,
             content: $this->content,
             title: $this->title,
             rating: $this->rating,
@@ -176,23 +162,5 @@ class PendingReview
         if (! (bool) config('reviews.photos.enabled', true)) {
             throw InvalidReviewException::photosDisabled();
         }
-    }
-
-    private function resolveAuthor(): Model
-    {
-        if ($this->author === null) {
-            throw new \LogicException('A review author is required; call by($author) before create().');
-        }
-
-        return $this->author;
-    }
-
-    private function resolveReviewable(): Model
-    {
-        if ($this->reviewable === null) {
-            throw new \LogicException('A reviewable subject is required; call for($subject) before create().');
-        }
-
-        return $this->reviewable;
     }
 }

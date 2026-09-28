@@ -33,7 +33,7 @@ it('filters verified and unverified reviews', function (): void {
         ->and(Review::query()->unverified()->count())->toBe(3);
 });
 
-it('toggles verification with the model helpers', function (): void {
+it('toggles verification with the model helpers, through the manager', function (): void {
     $review = Review::factory()->unverified()->create();
 
     $review->markVerified();
@@ -41,4 +41,14 @@ it('toggles verification with the model helpers', function (): void {
 
     $review->markUnverified();
     expect($review->fresh()->verified)->toBeFalse();
+});
+
+it('toggles verification through the facade', function (): void {
+    $review = Review::factory()->unverified()->create();
+
+    Reviews::verify($review);
+    expect($review->fresh()?->verified)->toBeTrue();
+
+    Reviews::unverify($review);
+    expect($review->fresh()?->verified)->toBeFalse();
 });

@@ -13,10 +13,10 @@ use RoundlyConsulting\Reviews\Support\ReviewVoteModel;
  * Removes a voter's vote from a review (idempotent) and recomputes the
  * denormalized tallies. Dispatches ReviewVoteRemoved only when a vote existed.
  */
-final class RemoveReviewVote
+final readonly class RemoveReviewVote
 {
     public function __construct(
-        private readonly RecountReviewVotes $recount = new RecountReviewVotes,
+        private RecountReviewVotes $recount,
     ) {}
 
     public function execute(Review $review, Model $voter): void

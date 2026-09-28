@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Reviews\Concerns;
 
 use Illuminate\Database\Eloquent\Model;
-use RoundlyConsulting\Reviews\Reviews;
+use RoundlyConsulting\Reviews\ReviewsManager;
 
 /**
  * Opt-in denormalized aggregate caching for a reviewable model. When the host
@@ -35,10 +35,10 @@ trait MaintainsReviewAggregates
      */
     public function recountReviews(): static
     {
-        $manager = app(Reviews::class);
+        $reviews = app(ReviewsManager::class)->for($this);
 
-        $this->setAttribute($this->aggregateCountColumn(), $manager->countFor($this));
-        $this->setAttribute($this->aggregateAvgColumn(), $manager->averageFor($this));
+        $this->setAttribute($this->aggregateCountColumn(), $reviews->count());
+        $this->setAttribute($this->aggregateAvgColumn(), $reviews->average());
 
         $this->saveQuietly();
 

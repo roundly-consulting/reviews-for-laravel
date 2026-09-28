@@ -9,10 +9,10 @@ use RoundlyConsulting\Reviews\Enums\ReviewStatus;
 use RoundlyConsulting\Reviews\Events\ReviewUpdated;
 use RoundlyConsulting\Reviews\Models\Review;
 
-final class UpdateReview
+final readonly class UpdateReview
 {
     public function __construct(
-        private readonly ValidatesRating $validateRating = new ValidatesRating,
+        private ValidatesRating $validateRating,
     ) {}
 
     public function execute(Review $review, UpdateReviewData $data): Review

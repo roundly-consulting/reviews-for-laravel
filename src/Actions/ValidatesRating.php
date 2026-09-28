@@ -6,7 +6,12 @@ namespace RoundlyConsulting\Reviews\Actions;
 
 use RoundlyConsulting\Reviews\Exceptions\InvalidRatingException;
 
-final class ValidatesRating
+/**
+ * Guards a rating against the configured `reviews.min_rating` / `reviews.max_rating` range.
+ *
+ * @internal building block of CreateReview / UpdateReview.
+ */
+final readonly class ValidatesRating
 {
     public function execute(?int $rating): void
     {

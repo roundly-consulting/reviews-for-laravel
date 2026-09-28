@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use RoundlyConsulting\PackageToolkit\Enums\DatabaseDriver;
 use RoundlyConsulting\Reviews\Enums\ReviewStatus;
-use RoundlyConsulting\Reviews\Reviews;
+use RoundlyConsulting\Reviews\ReviewsManager;
 use RoundlyConsulting\Reviews\ReviewsServiceProvider;
 use RoundlyConsulting\Reviews\Tests\Member;
 use RoundlyConsulting\Reviews\Tests\Product;
@@ -128,7 +128,7 @@ it('round-trips a review and its vote on the configured engine', function (): vo
         ->meta(['tier' => 2, 'region' => 'eu'])
         ->create();
 
-    app(Reviews::class)->vote($review, Voter::create());
+    app(ReviewsManager::class)->vote($review, Voter::create());
 
     $fresh = $review->fresh();
 

@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use RoundlyConsulting\Reviews\Facades\Reviews;
-use RoundlyConsulting\Reviews\Reviews as ReviewsManager;
+use RoundlyConsulting\Reviews\ReviewsManager;
 
 afterEach(function (): void {
     ReviewsManager::flushMacros();

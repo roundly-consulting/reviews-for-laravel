@@ -15,10 +15,10 @@ use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Support\PendingPhoto;
 use RoundlyConsulting\Reviews\Support\ReviewModel;
 
-final class CreateReview
+final readonly class CreateReview
 {
     public function __construct(
-        private readonly ValidatesRating $validateRating = new ValidatesRating,
+        private ValidatesRating $validateRating,
     ) {}
 
     public function execute(CreateReviewData $data): Review

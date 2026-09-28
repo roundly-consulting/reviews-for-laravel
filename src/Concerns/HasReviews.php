@@ -8,13 +8,15 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use RoundlyConsulting\Reviews\DataTransferObjects\RatingSummary;
 use RoundlyConsulting\Reviews\Models\Review;
-use RoundlyConsulting\Reviews\Reviews;
+use RoundlyConsulting\Reviews\ReviewsManager;
 use RoundlyConsulting\Reviews\Support\PendingReview;
+use RoundlyConsulting\Reviews\Support\ReviewableScope;
 use RoundlyConsulting\Reviews\Support\ReviewModel;
 
 /**
  * Adds review capability to a subject model: relations, aggregates, and a
- * convenience builder. All aggregates count approved reviews only.
+ * convenience builder. All aggregates count approved reviews only, and every
+ * aggregate and the builder go through {@see ReviewsManager::for()}.
  *
  * @phpstan-require-extends Model
  */
@@ -48,7 +50,7 @@ trait HasReviews
 
     public function averageRating(): ?float
     {
-        return $this->reviewsManager()->averageFor($this);
+        return $this->reviewScope()->average();
     }
 
     public function reviewsCount(): int
@@ -58,7 +60,7 @@ trait HasReviews
 
     public function approvedReviewsCount(): int
     {
-        return $this->reviewsManager()->countFor($this);
+        return $this->reviewScope()->count();
     }
 
     /**
@@ -66,21 +68,21 @@ trait HasReviews
      */
     public function ratingDistribution(): array
     {
-        return $this->reviewsManager()->distributionFor($this);
+        return $this->reviewScope()->distribution();
     }
 
     public function ratingSummary(): RatingSummary
     {
-        return $this->reviewsManager()->summaryFor($this);
+        return $this->reviewScope()->summary();
     }
 
     public function addReview(Model $author): PendingReview
     {
-        return $this->reviewsManager()->for($this)->by($author);
+        return $this->reviewScope()->by($author);
     }
 
-    private function reviewsManager(): Reviews
+    private function reviewScope(): ReviewableScope
     {
-        return app(Reviews::class);
+        return app(ReviewsManager::class)->for($this);
     }
 }

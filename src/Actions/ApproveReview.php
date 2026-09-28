@@ -9,7 +9,7 @@ use RoundlyConsulting\Reviews\Enums\ReviewStatus;
 use RoundlyConsulting\Reviews\Events\ReviewApproved;
 use RoundlyConsulting\Reviews\Models\Review;
 
-final class ApproveReview
+final readonly class ApproveReview
 {
     public function execute(Review $review): Review
     {

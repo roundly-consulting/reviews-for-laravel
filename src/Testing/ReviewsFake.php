@@ -6,168 +6,230 @@ namespace RoundlyConsulting\Reviews\Testing;
 
 use Illuminate\Database\Eloquent\Model;
 use PHPUnit\Framework\Assert;
+use RoundlyConsulting\Reviews\DataTransferObjects\CreateReviewData;
+use RoundlyConsulting\Reviews\DataTransferObjects\UpdateReviewData;
+use RoundlyConsulting\Reviews\Facades\Reviews;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Models\ReviewVote;
-use RoundlyConsulting\Reviews\Reviews;
-use RoundlyConsulting\Reviews\Support\PendingReview;
+use RoundlyConsulting\Reviews\ReviewsManager;
 
 /**
- * A recording, still-performing variant of {@see Reviews} for host-application
- * tests. Operations run against the database as usual while assertions verify
- * intent, matching Laravel's *::fake() ergonomics.
+ * The recording, still-performing stand-in {@see Reviews::fake()} swaps in.
  *
- * This class lives in src/ so host apps can use it; it depends on PHPUnit's
- * Assert, which is always present in a Laravel app's dev dependencies.
+ * Every operation runs against the database as usual (so reads, aggregates and events behave
+ * normally) while each mutation is recorded, from wherever it came: the facade, an injected
+ * {@see ReviewsManager}, a `for()->by()->create()` builder, the `HasReviews` /
+ * `CanVoteOnReviews` traits, or a `Review` model method (`respond()`, `markVerified()`,
+ * `markUnverified()`).
+ *
+ * Each `assert*()` takes an optional callback, called with the recorded review and — where the
+ * operation has one — the other party: the voter for votes, the parent review for responses.
+ *
+ * This class lives in src/ so host apps can use it; it depends on PHPUnit's Assert, which is
+ * always present in a Laravel app's dev dependencies.
+ *
+ * @phpstan-type Recorded array{review: Review, party: Model|null}
  */
-final class ReviewsFake extends Reviews
+final class ReviewsFake extends ReviewsManager
 {
-    /** @var list<Review> */
-    private array $created = [];
+    /** @var array<string, list<Recorded>> */
+    private array $recorded = [];
 
-    /** @var list<Review> */
-    private array $approved = [];
-
-    /** @var list<Review> */
-    private array $rejected = [];
-
-    /** @var list<Review> */
-    private array $responded = [];
-
-    /** @var list<Review> */
-    private array $voted = [];
-
-    public function for(Model $reviewable): PendingReview
+    public function create(CreateReviewData $data): Review
     {
-        return (new RecordingPendingReview($this))->for($reviewable);
-    }
-
-    public function recordCreated(Review $review): void
-    {
-        $this->created[] = $review;
+        return $this->record('created', parent::create($data));
     }
 
     public function approve(Review $review): Review
     {
-        $review = parent::approve($review);
-
-        $this->approved[] = $review;
-
-        return $review;
+        return $this->record('approved', parent::approve($review));
     }
 
     public function reject(Review $review, ?string $reason = null): Review
     {
-        $review = parent::reject($review, $reason);
+        return $this->record('rejected', parent::reject($review, $reason));
+    }
 
-        $this->rejected[] = $review;
+    public function update(Review $review, UpdateReviewData $data): Review
+    {
+        return $this->record('updated', parent::update($review, $data));
+    }
 
-        return $review;
+    public function delete(Review $review): void
+    {
+        parent::delete($review);
+
+        $this->record('deleted', $review);
     }
 
     public function respond(Review $review, Model $author, string $content, ?string $title = null): Review
     {
-        $response = parent::respond($review, $author, $content, $title);
-
-        $this->responded[] = $response;
-
-        return $response;
+        return $this->record('responded', parent::respond($review, $author, $content, $title), $review);
     }
 
     public function vote(Review $review, Model $voter, bool $helpful = true): ReviewVote
     {
         $vote = parent::vote($review, $voter, $helpful);
 
-        $this->voted[] = $review;
+        $this->record('voted', $review, $voter);
 
         return $vote;
     }
 
+    public function removeVote(Review $review, Model $voter): void
+    {
+        parent::removeVote($review, $voter);
+
+        $this->record('voteRemoved', $review, $voter);
+    }
+
+    public function verify(Review $review): Review
+    {
+        return $this->record('verified', parent::verify($review));
+    }
+
+    public function unverify(Review $review): Review
+    {
+        return $this->record('unverified', parent::unverify($review));
+    }
+
     public function assertReviewCreated(?callable $callback = null): void
     {
-        if ($callback === null) {
-            Assert::assertNotEmpty($this->created, 'Expected a review to be created, but none were.');
-
-            return;
-        }
-
-        Assert::assertTrue(
-            $this->matches($this->created, $callback),
-            'Expected a created review matching the callback, but none did.',
-        );
-    }
-
-    public function assertReviewApproved(?callable $callback = null): void
-    {
-        if ($callback === null) {
-            Assert::assertNotEmpty($this->approved, 'Expected a review to be approved, but none were.');
-
-            return;
-        }
-
-        Assert::assertTrue(
-            $this->matches($this->approved, $callback),
-            'Expected an approved review matching the callback, but none did.',
-        );
-    }
-
-    public function assertReviewRejected(?callable $callback = null): void
-    {
-        if ($callback === null) {
-            Assert::assertNotEmpty($this->rejected, 'Expected a review to be rejected, but none were.');
-
-            return;
-        }
-
-        Assert::assertTrue(
-            $this->matches($this->rejected, $callback),
-            'Expected a rejected review matching the callback, but none did.',
-        );
-    }
-
-    public function assertReviewResponded(?callable $callback = null): void
-    {
-        if ($callback === null) {
-            Assert::assertNotEmpty($this->responded, 'Expected a response to be created, but none were.');
-
-            return;
-        }
-
-        Assert::assertTrue(
-            $this->matches($this->responded, $callback),
-            'Expected a response matching the callback, but none did.',
-        );
-    }
-
-    public function assertReviewVoted(?callable $callback = null): void
-    {
-        if ($callback === null) {
-            Assert::assertNotEmpty($this->voted, 'Expected a review to be voted on, but none were.');
-
-            return;
-        }
-
-        Assert::assertTrue(
-            $this->matches($this->voted, $callback),
-            'Expected a voted review matching the callback, but none did.',
-        );
+        $this->assertRecorded('created', 'a review to be created', $callback);
     }
 
     public function assertNothingReviewed(): void
     {
-        Assert::assertEmpty($this->created, 'Expected no reviews to be created.');
+        $this->assertNothingRecorded('created', 'no review to be created');
     }
 
-    /**
-     * @param  list<Review>  $reviews
-     */
-    private function matches(array $reviews, callable $callback): bool
+    public function assertReviewApproved(?callable $callback = null): void
     {
-        foreach ($reviews as $review) {
-            if ($callback($review) === true) {
-                return true;
+        $this->assertRecorded('approved', 'a review to be approved', $callback);
+    }
+
+    public function assertNothingApproved(): void
+    {
+        $this->assertNothingRecorded('approved', 'no review to be approved');
+    }
+
+    public function assertReviewRejected(?callable $callback = null): void
+    {
+        $this->assertRecorded('rejected', 'a review to be rejected', $callback);
+    }
+
+    public function assertNothingRejected(): void
+    {
+        $this->assertNothingRecorded('rejected', 'no review to be rejected');
+    }
+
+    public function assertReviewUpdated(?callable $callback = null): void
+    {
+        $this->assertRecorded('updated', 'a review to be updated', $callback);
+    }
+
+    public function assertNothingUpdated(): void
+    {
+        $this->assertNothingRecorded('updated', 'no review to be updated');
+    }
+
+    public function assertReviewDeleted(?callable $callback = null): void
+    {
+        $this->assertRecorded('deleted', 'a review to be deleted', $callback);
+    }
+
+    public function assertNothingDeleted(): void
+    {
+        $this->assertNothingRecorded('deleted', 'no review to be deleted');
+    }
+
+    /** The callback receives the response, then the parent review. */
+    public function assertReviewResponded(?callable $callback = null): void
+    {
+        $this->assertRecorded('responded', 'a response to be created', $callback);
+    }
+
+    public function assertNothingResponded(): void
+    {
+        $this->assertNothingRecorded('responded', 'no response to be created');
+    }
+
+    /** The callback receives the review, then the voter. */
+    public function assertReviewVoted(?callable $callback = null): void
+    {
+        $this->assertRecorded('voted', 'a review to be voted on', $callback);
+    }
+
+    public function assertNothingVoted(): void
+    {
+        $this->assertNothingRecorded('voted', 'no review to be voted on');
+    }
+
+    /** The callback receives the review, then the voter. */
+    public function assertReviewVoteRemoved(?callable $callback = null): void
+    {
+        $this->assertRecorded('voteRemoved', 'a vote to be removed', $callback);
+    }
+
+    public function assertNoVoteRemoved(): void
+    {
+        $this->assertNothingRecorded('voteRemoved', 'no vote to be removed');
+    }
+
+    public function assertReviewVerified(?callable $callback = null): void
+    {
+        $this->assertRecorded('verified', 'a review to be verified', $callback);
+    }
+
+    public function assertNothingVerified(): void
+    {
+        $this->assertNothingRecorded('verified', 'no review to be verified');
+    }
+
+    public function assertReviewUnverified(?callable $callback = null): void
+    {
+        $this->assertRecorded('unverified', 'a review to be unverified', $callback);
+    }
+
+    public function assertNothingUnverified(): void
+    {
+        $this->assertNothingRecorded('unverified', 'no review to be unverified');
+    }
+
+    private function record(string $kind, Review $review, ?Model $party = null): Review
+    {
+        $this->recorded[$kind][] = ['review' => $review, 'party' => $party];
+
+        return $review;
+    }
+
+    private function assertRecorded(string $kind, string $expectation, ?callable $callback): void
+    {
+        $calls = $this->recorded[$kind] ?? [];
+
+        if ($callback === null) {
+            Assert::assertNotEmpty($calls, "Expected {$expectation}, but none were.");
+
+            return;
+        }
+
+        $matched = false;
+
+        foreach ($calls as $call) {
+            if ($callback($call['review'], $call['party']) === true) {
+                $matched = true;
+
+                break;
             }
         }
 
-        return false;
+        Assert::assertTrue($matched, "Expected {$expectation} matching the callback, but none did.");
+    }
+
+    private function assertNothingRecorded(string $kind, string $expectation): void
+    {
+        $count = count($this->recorded[$kind] ?? []);
+
+        Assert::assertSame(0, $count, "Expected {$expectation}, but {$count} were.");
     }
 }

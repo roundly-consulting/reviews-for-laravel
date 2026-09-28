@@ -17,7 +17,7 @@ use RoundlyConsulting\Reviews\Support\ReviewModel;
  * reviewable, and are approved immediately so they never sit in the moderation
  * queue (they are authored by the owner, not the public).
  */
-final class RespondToReview
+final readonly class RespondToReview
 {
     public function execute(Review $parent, Model $author, string $content, ?string $title = null): Review
     {

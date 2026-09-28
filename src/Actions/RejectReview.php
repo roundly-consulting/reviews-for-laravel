@@ -8,7 +8,7 @@ use RoundlyConsulting\Reviews\Enums\ReviewStatus;
 use RoundlyConsulting\Reviews\Events\ReviewRejected;
 use RoundlyConsulting\Reviews\Models\Review;
 
-final class RejectReview
+final readonly class RejectReview
 {
     public function execute(Review $review, ?string $reason = null): Review
     {

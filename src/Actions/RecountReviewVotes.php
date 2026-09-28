@@ -9,8 +9,10 @@ use RoundlyConsulting\Reviews\Support\ReviewVoteModel;
 
 /**
  * Recomputes a review's denormalized helpful/unhelpful tallies from its votes.
+ *
+ * @internal building block of VoteOnReview / RemoveReviewVote.
  */
-final class RecountReviewVotes
+final readonly class RecountReviewVotes
 {
     public function execute(Review $review): Review
     {

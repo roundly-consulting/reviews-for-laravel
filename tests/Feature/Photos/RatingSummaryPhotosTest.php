@@ -38,8 +38,8 @@ it('counts photos across approved reviews only', function (): void {
 
     expect($summary->photoCount)->toBe(5)
         ->and($summary->reviewsWithPhotos)->toBe(2)
-        ->and(Reviews::photoCountFor($product))->toBe(5)
-        ->and(Reviews::reviewsWithPhotosFor($product))->toBe(2);
+        ->and(Reviews::for($product)->photoCount())->toBe(5)
+        ->and(Reviews::for($product)->reviewsWithPhotos())->toBe(2);
 });
 
 it('ignores approved reviews that carry no photos', function (): void {
@@ -61,7 +61,7 @@ it('reports zero photo counts when photos are disabled', function (): void {
 
     config()->set('reviews.photos.enabled', false);
 
-    expect(Reviews::photoCountFor($product))->toBe(0)
-        ->and(Reviews::reviewsWithPhotosFor($product))->toBe(0)
+    expect(Reviews::for($product)->photoCount())->toBe(0)
+        ->and(Reviews::for($product)->reviewsWithPhotos())->toBe(0)
         ->and($product->ratingSummary()->photoCount)->toBe(0);
 });

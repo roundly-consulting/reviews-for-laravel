@@ -56,7 +56,7 @@ final class ReviewsServiceProvider extends PackageServiceProvider
     {
         parent::register();
 
-        $this->app->singleton(Reviews::class);
+        $this->app->singleton(ReviewsManager::class);
 
         $this->bindFromConfig(ReviewModerator::class, 'reviews.moderator', NullModerator::class);
     }

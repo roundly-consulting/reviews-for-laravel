@@ -7,7 +7,7 @@ namespace RoundlyConsulting\Reviews\Actions;
 use RoundlyConsulting\Reviews\Events\ReviewDeleted;
 use RoundlyConsulting\Reviews\Models\Review;
 
-final class DeleteReview
+final readonly class DeleteReview
 {
     public function execute(Review $review): void
     {

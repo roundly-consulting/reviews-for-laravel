@@ -56,13 +56,16 @@ it('accepts a collection for meta', function (): void {
     expect($review->meta?->get('a'))->toBe('b');
 });
 
-it('requires an author', function (): void {
-    Reviews::for(Entity::create())->content('x')->create();
-})->throws(LogicException::class);
+it('fixes the subject and author when the builder is made', function (): void {
+    $reviewable = Entity::create();
+    $author = Entity::create();
 
-it('requires a reviewable subject', function (): void {
-    (new PendingReview)
-        ->by(Entity::create())
-        ->content('x')
-        ->create();
-})->throws(LogicException::class);
+    $pending = Reviews::for($reviewable)->by($author);
+
+    expect($pending)->toBeInstanceOf(PendingReview::class);
+
+    $review = $pending->rating(3)->create();
+
+    expect($review->reviewable->is($reviewable))->toBeTrue()
+        ->and($review->author->is($author))->toBeTrue();
+});

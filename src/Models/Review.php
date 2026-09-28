@@ -14,11 +14,11 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use RoundlyConsulting\MediaLibrary\Contracts\HasMedia;
-use RoundlyConsulting\Reviews\Actions\RespondToReview;
 use RoundlyConsulting\Reviews\Concerns\HasReviewPhotos;
 use RoundlyConsulting\Reviews\Concerns\HasReviewScopes;
 use RoundlyConsulting\Reviews\Database\Factories\ReviewFactory;
 use RoundlyConsulting\Reviews\Enums\ReviewStatus;
+use RoundlyConsulting\Reviews\ReviewsManager;
 use RoundlyConsulting\Reviews\Support\ReviewVoteModel;
 
 /**
@@ -106,28 +106,22 @@ class Review extends Model implements HasMedia
         return $this->parent_id !== null;
     }
 
-    public function respond(Model $author, string $content, ?string $title = null): self
+    /** Respond to this review — {@see ReviewsManager::respond()}. */
+    public function respond(Model $author, string $content, ?string $title = null): Review
     {
-        /** @var self $response */
-        $response = app(RespondToReview::class)->execute($this, $author, $content, $title);
-
-        return $response;
+        return app(ReviewsManager::class)->respond($this, $author, $content, $title);
     }
 
-    public function markVerified(): self
+    /** Flag this review as verified — {@see ReviewsManager::verify()}. */
+    public function markVerified(): Review
     {
-        $this->verified = true;
-        $this->save();
-
-        return $this;
+        return app(ReviewsManager::class)->verify($this);
     }
 
-    public function markUnverified(): self
+    /** Clear this review's verified flag — {@see ReviewsManager::unverify()}. */
+    public function markUnverified(): Review
     {
-        $this->verified = false;
-        $this->save();
-
-        return $this;
+        return app(ReviewsManager::class)->unverify($this);
     }
 
     public function isPending(): bool

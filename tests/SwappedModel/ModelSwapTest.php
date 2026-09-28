@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use RoundlyConsulting\Reviews\Reviews;
+use RoundlyConsulting\Reviews\ReviewsManager;
 use RoundlyConsulting\Reviews\Tests\Member;
 use RoundlyConsulting\Reviews\Tests\Product;
 use RoundlyConsulting\Reviews\Tests\TenantReview;
@@ -50,7 +50,7 @@ it('honours a host vote model through the voting flow', function (): void {
     expect('reviews.vote_model')->toHonourModelSwap(TenantVote::class, function (): array {
         $review = Product::create()->addReview(Member::create())->rating(4)->content('Good.')->create();
 
-        $vote = app(Reviews::class)->vote($review, Voter::create());
+        $vote = app(ReviewsManager::class)->vote($review, Voter::create());
 
         return [
             $vote,

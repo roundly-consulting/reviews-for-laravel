@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use RoundlyConsulting\Reviews\Models\Review;
-use RoundlyConsulting\Reviews\Reviews;
+use RoundlyConsulting\Reviews\ReviewsManager;
 use RoundlyConsulting\Reviews\Tests\Member;
 use RoundlyConsulting\Reviews\Tests\Product;
 use RoundlyConsulting\Reviews\Tests\TenantReview;
@@ -26,7 +26,7 @@ it('finds a review written through the configured model', function (): void {
 
     $review = $product->addReview($author)->rating(4)->content('Solid.')->create();
 
-    app(Reviews::class)->approve($review);
+    app(ReviewsManager::class)->approve($review);
 
     expect(Review::query()->count())->toBe(0)
         ->and($product)->toHaveReview()

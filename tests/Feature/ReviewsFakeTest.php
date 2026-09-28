@@ -2,80 +2,223 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\Eloquent\Model;
 use PHPUnit\Framework\AssertionFailedError;
+use RoundlyConsulting\Reviews\DataTransferObjects\CreateReviewData;
+use RoundlyConsulting\Reviews\DataTransferObjects\UpdateReviewData;
 use RoundlyConsulting\Reviews\Facades\Reviews;
 use RoundlyConsulting\Reviews\Models\Review;
+use RoundlyConsulting\Reviews\ReviewsManager;
 use RoundlyConsulting\Reviews\Testing\ReviewsFake;
 use RoundlyConsulting\Reviews\Tests\Entity;
 use RoundlyConsulting\Reviews\Tests\Product;
+use RoundlyConsulting\Reviews\Tests\Voter;
 
-it('swaps in a recording fake', function (): void {
+it('swaps in a recording fake that subtypes the manager', function (): void {
     $fake = Reviews::fake();
 
     expect($fake)->toBeInstanceOf(ReviewsFake::class)
-        ->and(app(RoundlyConsulting\Reviews\Reviews::class))->toBe($fake);
+        ->toBeInstanceOf(ReviewsManager::class)
+        ->and(app(ReviewsManager::class))->toBe($fake)
+        ->and(Reviews::getFacadeRoot())->toBe($fake);
 });
 
-it('records created reviews', function (): void {
-    $fake = Reviews::fake();
+it('still performs every operation', function (): void {
+    Reviews::fake();
 
-    Reviews::for(Product::query()->create())->by(Entity::query()->create())->rating(5)->create();
+    $review = Reviews::for(Product::query()->create())->by(Entity::query()->create())->rating(5)->create();
 
-    $fake->assertReviewCreated();
-    $fake->assertReviewCreated(fn (Review $review): bool => $review->rating === 5);
+    expect(Review::query()->find($review->getKey()))->not->toBeNull();
 });
 
-it('asserts nothing reviewed', function (): void {
+/**
+ * One row per recorded operation: how to perform it (through the facade), the assertion that
+ * must pass afterwards, its callback matcher, and the assertNothing* twin.
+ *
+ * @return array<string, array{Closure(Review): void, string, Closure, string}>
+ */
+dataset('recorded operations', fn (): array => [
+    'create via for()->by()' => [
+        fn (Review $review): Review => Reviews::for(Product::query()->create())->by(Entity::query()->create())->rating(4)->create(),
+        'assertReviewCreated',
+        fn (Review $created): bool => $created->rating === 4,
+        'assertNothingReviewed',
+    ],
+    'create via DTO' => [
+        fn (Review $review): Review => Reviews::create(new CreateReviewData(author: Entity::query()->create(), reviewable: Product::query()->create(), rating: 4)),
+        'assertReviewCreated',
+        fn (Review $created): bool => $created->rating === 4,
+        'assertNothingReviewed',
+    ],
+    'approve' => [
+        fn (Review $review): Review => Reviews::approve($review),
+        'assertReviewApproved',
+        fn (Review $approved): bool => $approved->isApproved(),
+        'assertNothingApproved',
+    ],
+    'reject' => [
+        fn (Review $review): Review => Reviews::reject($review, 'spam'),
+        'assertReviewRejected',
+        fn (Review $rejected): bool => $rejected->meta?->get('rejection_reason') === 'spam',
+        'assertNothingRejected',
+    ],
+    'update' => [
+        fn (Review $review): Review => Reviews::update($review, new UpdateReviewData(title: 'Edited')),
+        'assertReviewUpdated',
+        fn (Review $updated): bool => $updated->title === 'Edited',
+        'assertNothingUpdated',
+    ],
+    'delete' => [
+        fn (Review $review) => Reviews::delete($review),
+        'assertReviewDeleted',
+        fn (Review $deleted): bool => $deleted->trashed(),
+        'assertNothingDeleted',
+    ],
+    'respond' => [
+        fn (Review $review): Review => Reviews::respond($review, Entity::query()->create(), 'Thanks'),
+        'assertReviewResponded',
+        fn (Review $response, Review $parent): bool => $response->parent_id === $parent->getKey(),
+        'assertNothingResponded',
+    ],
+    'vote' => [
+        fn (Review $review) => Reviews::vote($review, Voter::query()->create()),
+        'assertReviewVoted',
+        fn (Review $review, Model $voter): bool => $voter instanceof Voter,
+        'assertNothingVoted',
+    ],
+    'remove a vote' => [
+        fn (Review $review) => Reviews::removeVote($review, Voter::query()->create()),
+        'assertReviewVoteRemoved',
+        fn (Review $review, Model $voter): bool => $voter instanceof Voter,
+        'assertNoVoteRemoved',
+    ],
+    'verify' => [
+        fn (Review $review): Review => Reviews::verify($review),
+        'assertReviewVerified',
+        fn (Review $verified): bool => $verified->verified,
+        'assertNothingVerified',
+    ],
+    'unverify' => [
+        fn (Review $review): Review => Reviews::unverify($review),
+        'assertReviewUnverified',
+        fn (Review $unverified): bool => ! $unverified->verified,
+        'assertNothingUnverified',
+    ],
+]);
+
+it('records the operation and passes its assertions', function (Closure $perform, string $assert, Closure $matches, string $assertNothing): void {
+    $fake = Reviews::fake();
+    $review = Review::factory()->pending()->create(['verified' => $assert === 'assertReviewUnverified']);
+
+    $fake->{$assertNothing}();
+
+    $perform($review);
+
+    $fake->{$assert}();
+    $fake->{$assert}($matches);
+})->with('recorded operations');
+
+it('fails each assertion when nothing was recorded', function (Closure $perform, string $assert, Closure $matches, string $assertNothing): void {
     $fake = Reviews::fake();
 
-    $fake->assertNothingReviewed();
-});
+    expect(fn () => $fake->{$assert}())->toThrow(AssertionFailedError::class, 'but none were');
+})->with('recorded operations');
 
-it('records approvals and rejections', function (): void {
+it('fails each assertion when no recorded call matches the callback', function (Closure $perform, string $assert, Closure $matches, string $assertNothing): void {
+    $fake = Reviews::fake();
+    $review = Review::factory()->pending()->create(['verified' => $assert === 'assertReviewUnverified']);
+
+    $perform($review);
+
+    expect(fn () => $fake->{$assert}(fn (): bool => false))->toThrow(AssertionFailedError::class, 'matching the callback');
+})->with('recorded operations');
+
+it('fails each assertNothing* once the operation was recorded', function (Closure $perform, string $assert, Closure $matches, string $assertNothing): void {
+    $fake = Reviews::fake();
+    $review = Review::factory()->pending()->create(['verified' => $assert === 'assertReviewUnverified']);
+
+    $perform($review);
+
+    expect(fn () => $fake->{$assertNothing}())->toThrow(AssertionFailedError::class, 'but 1 were');
+})->with('recorded operations');
+
+it('keeps each operation in its own bucket', function (): void {
     $fake = Reviews::fake();
 
-    $review = Review::factory()->create();
-    Reviews::approve($review);
+    Reviews::approve(Review::factory()->pending()->create());
+
     $fake->assertReviewApproved();
-
-    $rejected = Review::factory()->create();
-    Reviews::reject($rejected, 'spam');
-    $fake->assertReviewRejected(fn (Review $r): bool => $r->is($rejected));
+    $fake->assertNothingRejected();
+    $fake->assertNothingReviewed();
+    $fake->assertNothingUpdated();
 });
 
-it('records responses and votes', function (): void {
-    $fake = Reviews::fake();
+describe('calls made through models and traits', function (): void {
+    it('records a review added through HasReviews::addReview()', function (): void {
+        $fake = Reviews::fake();
+        $product = Product::query()->create();
 
-    $review = Review::factory()->approved()->create();
-    $response = Reviews::respond($review, Entity::query()->create(), 'Thanks');
-    $fake->assertReviewResponded();
-    $fake->assertReviewResponded(fn (Review $r): bool => $r->is($response));
+        $product->addReview(Entity::query()->create())->rating(5)->create();
 
-    Reviews::vote($review, Entity::query()->create(), true);
-    $fake->assertReviewVoted();
-    $fake->assertReviewVoted(fn (Review $r): bool => $r->is($review));
+        $fake->assertReviewCreated(fn (Review $review): bool => $review->reviewable?->is($product) === true);
+    });
+
+    it('records a response made through Review::respond()', function (): void {
+        $fake = Reviews::fake();
+        $review = Review::factory()->approved()->create();
+
+        $review->respond(Entity::query()->create(), 'Thanks');
+
+        $fake->assertReviewResponded(fn (Review $response, Review $parent): bool => $parent->is($review));
+    });
+
+    it('records verification through Review::markVerified() and markUnverified()', function (): void {
+        $fake = Reviews::fake();
+        $review = Review::factory()->unverified()->create();
+
+        $review->markVerified();
+        $fake->assertReviewVerified(fn (Review $verified): bool => $verified->is($review));
+        $fake->assertNothingUnverified();
+
+        $review->markUnverified();
+        $fake->assertReviewUnverified(fn (Review $unverified): bool => $unverified->is($review));
+    });
+
+    it('records votes cast and withdrawn through CanVoteOnReviews', function (): void {
+        $fake = Reviews::fake();
+        $review = Review::factory()->approved()->create();
+        $voter = Voter::query()->create();
+
+        $voter->voteOn($review);
+        $fake->assertReviewVoted(fn (Review $voted, Model $voter): bool => $voter->is($voter));
+        $fake->assertNoVoteRemoved();
+
+        $voter->removeVoteFrom($review);
+        $fake->assertReviewVoteRemoved(fn (Review $voted, Model $voter): bool => $voter->is($voter));
+    });
+
+    it('fails when a model call recorded something else', function (): void {
+        $fake = Reviews::fake();
+        $review = Review::factory()->approved()->create();
+
+        $review->respond(Entity::query()->create(), 'Thanks');
+
+        expect(fn () => $fake->assertReviewResponded(fn (Review $response, Review $parent): bool => false))
+            ->toThrow(AssertionFailedError::class)
+            ->and(fn () => $fake->assertNothingResponded())->toThrow(AssertionFailedError::class);
+    });
 });
 
-it('matches approvals by callback', function (): void {
+it('hands a constructor-injected manager the fake', function (): void {
     $fake = Reviews::fake();
 
-    $review = Review::factory()->create();
-    Reviews::approve($review);
+    $service = new class(app(ReviewsManager::class))
+    {
+        public function __construct(public ReviewsManager $reviews) {}
+    };
 
-    $fake->assertReviewApproved(fn (Review $r): bool => $r->is($review));
-});
+    $service->reviews->approve(Review::factory()->pending()->create());
 
-it('fails the various assertions when nothing matched', function (): void {
-    $fake = Reviews::fake();
-
-    expect(fn () => $fake->assertReviewCreated())->toThrow(AssertionFailedError::class);
-    expect(fn () => $fake->assertReviewCreated(fn (Review $r): bool => false))->toThrow(AssertionFailedError::class);
-    expect(fn () => $fake->assertReviewApproved())->toThrow(AssertionFailedError::class);
-    expect(fn () => $fake->assertReviewApproved(fn (Review $r): bool => false))->toThrow(AssertionFailedError::class);
-    expect(fn () => $fake->assertReviewRejected())->toThrow(AssertionFailedError::class);
-    expect(fn () => $fake->assertReviewRejected(fn (Review $r): bool => false))->toThrow(AssertionFailedError::class);
-    expect(fn () => $fake->assertReviewResponded())->toThrow(AssertionFailedError::class);
-    expect(fn () => $fake->assertReviewResponded(fn (Review $r): bool => false))->toThrow(AssertionFailedError::class);
-    expect(fn () => $fake->assertReviewVoted())->toThrow(AssertionFailedError::class);
-    expect(fn () => $fake->assertReviewVoted(fn (Review $r): bool => false))->toThrow(AssertionFailedError::class);
+    expect($service->reviews)->toBe($fake);
+    $fake->assertReviewApproved();
 });

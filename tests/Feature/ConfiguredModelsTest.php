@@ -5,7 +5,7 @@ declare(strict_types=1);
 use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Models\ReviewVote;
-use RoundlyConsulting\Reviews\Reviews;
+use RoundlyConsulting\Reviews\ReviewsManager;
 use RoundlyConsulting\Reviews\Support\ReviewModel;
 use RoundlyConsulting\Reviews\Support\ReviewVoteModel;
 use RoundlyConsulting\Reviews\Tests\Member;
@@ -34,7 +34,7 @@ it('writes, reads and aggregates through the configured model', function (): voi
         // Nothing landed in the packaged table.
         ->and(Review::query()->count())->toBe(0);
 
-    app(Reviews::class)->approve($review);
+    app(ReviewsManager::class)->approve($review);
 
     expect($product->approvedReviewsCount())->toBe(1)
         ->and($product->averageRating())->toBe(5.0)

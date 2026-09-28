@@ -15,10 +15,10 @@ use RoundlyConsulting\Reviews\Support\ReviewVoteModel;
  * One vote per voter per review: re-voting updates the existing row. The
  * review's denormalized helpful_count/unhelpful_count are recomputed after.
  */
-final class VoteOnReview
+final readonly class VoteOnReview
 {
     public function __construct(
-        private readonly RecountReviewVotes $recount = new RecountReviewVotes,
+        private RecountReviewVotes $recount,
     ) {}
 
     public function execute(Review $review, Model $voter, bool $helpful = true): ReviewVote

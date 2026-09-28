@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Models\ReviewVote;
-use RoundlyConsulting\Reviews\Reviews;
+use RoundlyConsulting\Reviews\ReviewsManager;
 use RoundlyConsulting\Reviews\Support\ReviewVoteModel;
 
 /**
@@ -20,12 +20,12 @@ trait CanVoteOnReviews
 {
     public function voteOn(Review $review, bool $helpful = true): ReviewVote
     {
-        return app(Reviews::class)->vote($review, $this, $helpful);
+        return app(ReviewsManager::class)->vote($review, $this, $helpful);
     }
 
     public function removeVoteFrom(Review $review): void
     {
-        app(Reviews::class)->removeVote($review, $this);
+        app(ReviewsManager::class)->removeVote($review, $this);
     }
 
     public function hasVotedOn(Review $review): bool
