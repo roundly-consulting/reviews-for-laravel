@@ -6,7 +6,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 use RoundlyConsulting\MediaLibrary\Exceptions\DraftMediaNotFound;
-use RoundlyConsulting\MediaLibrary\Facades\Media;
+use RoundlyConsulting\MediaLibrary\Facades\MediaLibrary;
 use RoundlyConsulting\Reviews\Events\ReviewCreated;
 use RoundlyConsulting\Reviews\Exceptions\InvalidReviewException;
 use RoundlyConsulting\Reviews\Facades\Reviews;
@@ -19,7 +19,7 @@ beforeEach(function (): void {
 
 function photoDraftToken(string $name = 'draft.jpg'): string
 {
-    return (string) Media::draft(UploadedFile::fake()->image($name, 400, 300))
+    return (string) MediaLibrary::draft(UploadedFile::fake()->image($name, 400, 300))
         ->toBucket('photos')
         ->draft_token;
 }
