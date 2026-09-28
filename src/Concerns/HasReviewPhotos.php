@@ -9,8 +9,10 @@ use DateTimeInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use RoundlyConsulting\MediaLibrary\Concerns\InteractsWithMedia;
+use RoundlyConsulting\MediaLibrary\Contracts\HasMedia;
 use RoundlyConsulting\MediaLibrary\Models\Media;
 use RoundlyConsulting\MediaLibrary\Variants\ResponsiveImageGenerator;
+use RoundlyConsulting\MediaLibrary\Variants\VariantResolver;
 
 /**
  * First-class review photos for the bundled Review model, built on
@@ -133,9 +135,15 @@ trait HasReviewPhotos
      * The URL to serve a photo at, chosen by the photo's own visibility: a public photo gets its
      * public (CDN-rewritable) URL, a private one a short-lived signed URL (presigned on capable
      * disks, otherwise media's signed streaming route). A private photo never gets a public URL.
+     *
+     * The bucket's variants are its responsive ladder, named `responsive-{width}`. A declared
+     * variant that has not been generated yet serves the original instead — see
+     * {@see self::servablePhotoVariant()}.
      */
     public function resolvePhotoUrl(Media $media, string $variant = ''): string
     {
+        $variant = $this->servablePhotoVariant($media, $variant);
+
         return $media->isPrivate()
             ? $media->getTemporaryUrl($this->photoUrlExpiry(), $variant)
             : $media->getUrl($variant);
@@ -190,7 +198,7 @@ trait HasReviewPhotos
             return '';
         }
 
-        return $media->getTemporaryUrl($expiry ?? $this->photoUrlExpiry(), $variant);
+        return $media->getTemporaryUrl($expiry ?? $this->photoUrlExpiry(), $this->servablePhotoVariant($media, $variant));
     }
 
     public function photosBucket(): string
@@ -198,6 +206,35 @@ trait HasReviewPhotos
         $bucket = config('reviews.photos.bucket', 'photos');
 
         return is_string($bucket) && $bucket !== '' ? $bucket : 'photos';
+    }
+
+    /**
+     * The variant a URL can actually point at: the requested one once generated, else the
+     * original (`''`) when the bucket declares that variant — its generation is still queued, a
+     * width joined the ladder after the photo was stored, or the photo is narrower than that
+     * width (the ladder never upscales, so the original is the largest there is). A name the
+     * bucket never declared is passed through untouched, so media-library still throws
+     * `InvalidVariant` for a typo.
+     */
+    private function servablePhotoVariant(Media $media, string $variant): string
+    {
+        if ($variant === '' || $media->hasGeneratedVariant($variant)) {
+            return $variant;
+        }
+
+        $owner = $media->model;
+
+        if (! $owner instanceof HasMedia) {
+            return $variant;
+        }
+
+        foreach (app(VariantResolver::class)->forOwnerBucket($owner, $media->bucket_name) as $declared) {
+            if ($declared->name === $variant) {
+                return '';
+            }
+        }
+
+        return $variant;
     }
 
     private function photosVisibility(): string

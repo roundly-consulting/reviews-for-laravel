@@ -366,13 +366,19 @@ $review->photos();                 // Collection<Media> (ordered gallery)
 $review->hasPhotos();              // bool
 $review->photoCount();             // int
 $review->firstPhotoUrl();          // string ('' when empty)
-$review->firstPhotoUrl('thumb');   // a named responsive variant
+$review->firstPhotoUrl('responsive-320'); // a responsive variant, named responsive-{width}
 $review->photoUrls();              // list<string>
 $review->responsivePhotos(['class' => 'photo']); // list<string> of <img srcset="…">
 $review->resolvePhotoUrl($media);  // one photo's URL
 $review->photoSrcset($media);      // one photo's srcset
 $review->firstPhotoTemporaryUrl(); // always a signed URL
 ```
+
+The variants are the bucket's responsive ladder: one `responsive-{width}` per
+`photos.responsive_widths` entry (`responsive-320`, `responsive-640`, `responsive-1024` by
+default). Until a variant has been generated — or when the photo is narrower than that width,
+since the ladder never upscales — the readers serve the original instead. A name the bucket
+does not declare (e.g. `'thumb'`) throws media-library's `InvalidVariant`.
 
 Every reader resolves each photo by its visibility: public photos get their public (CDN-able)
 URLs, while with `photos.visibility = private` every URL — including `srcset` entries,
