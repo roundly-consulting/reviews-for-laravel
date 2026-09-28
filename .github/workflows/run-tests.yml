@@ -107,3 +107,51 @@ jobs:
         # Coverage is enforced on the sqlite matrix; this is a correctness leg, and
         # re-measuring it doubles the slowest job for no signal.
         run: vendor/bin/pest --ci
+
+  test-mysql:
+    runs-on: ubuntu-latest
+    name: P8.4 - mysql real-engine
+
+    # MySQL disagrees with pgsql/sqlite where reviews cares: the helpful tallies are UNSIGNED,
+    # and MySQL raises ERROR 1690 when an unsigned subtraction goes negative (`mostHelpful()`).
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_DATABASE: testing
+          MYSQL_ROOT_PASSWORD: secret
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -psecret"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.4
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, mysql, pdo_mysql, bcmath, soap, intl, gd, exif, iconv, fileinfo
+          coverage: none
+
+      - name: Install dependencies
+        env:
+          COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.COMPOSER_AUTH_TOKEN }}"}}'
+        run: composer update --prefer-stable --prefer-dist --no-interaction
+
+      - name: Execute tests against mysql
+        env:
+          # root, because the isolated probe connection (toApplyOnConnection) creates its
+          # own database, which a plain MYSQL_USER is not allowed to do.
+          TESTING_DB_DRIVER: mysql
+          TESTING_DB_HOST: 127.0.0.1
+          TESTING_DB_PORT: 3306
+          TESTING_DB_DATABASE: testing
+          TESTING_DB_USERNAME: root
+          TESTING_DB_PASSWORD: secret
+        run: vendor/bin/pest --ci

@@ -6,6 +6,7 @@ namespace RoundlyConsulting\Reviews\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use RoundlyConsulting\PackageToolkit\Support\RawExpression;
 use RoundlyConsulting\Reviews\Enums\ReviewStatus;
 
 /**
@@ -130,10 +131,25 @@ trait HasReviewScopes
     /**
      * Order by net helpful score (helpful minus unhelpful), most helpful first.
      *
+     * Both tallies are UNSIGNED columns. MySQL and MariaDB raise ERROR 1690 ("BIGINT UNSIGNED
+     * value is out of range") as soon as an unsigned subtraction goes negative — i.e. the first
+     * time a review has more unhelpful than helpful votes — unless the server runs with
+     * NO_UNSIGNED_SUBTRACTION, which Laravel's default sql_mode does not set. So on those engines
+     * both operands are cast to SIGNED first; pgsql and sqlite have no unsigned integers and
+     * subtract directly (neither accepts `AS SIGNED`).
+     *
      * @param  Builder<static>  $query
      */
     public function scopeMostHelpful(Builder $query): void
     {
-        $query->orderByRaw('(helpful_count - unhelpful_count) desc')->orderByDesc('created_at');
+        $grammar = $query->getQuery()->getGrammar();
+        $helpful = $grammar->wrap($query->qualifyColumn('helpful_count'));
+        $unhelpful = $grammar->wrap($query->qualifyColumn('unhelpful_count'));
+
+        $score = in_array($query->getModel()->getConnection()->getDriverName(), ['mysql', 'mariadb'], true)
+            ? "cast({$helpful} as signed) - cast({$unhelpful} as signed)"
+            : "{$helpful} - {$unhelpful}";
+
+        $query->orderBy(new RawExpression("({$score})"), 'desc')->orderByDesc($query->qualifyColumn('created_at'));
     }
 }
