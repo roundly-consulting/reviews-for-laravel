@@ -197,6 +197,100 @@ The package works with zero configuration; every key above has a sensible defaul
 
 ## Usage
 
+### The `Reviews` facade at a glance
+
+Everything the package does is one call away on the `Reviews` facade:
+
+```php
+use RoundlyConsulting\Reviews\Facades\Reviews;
+
+// One subject: author a review, read its aggregates, list its reviews
+Reviews::for($product)->by($user)->rating(5)->content('Great')->create();
+Reviews::for($product)->summary();            // RatingSummary DTO
+Reviews::for($product)->average();            // ?float
+Reviews::for($product)->count();              // int (approved)
+Reviews::for($product)->distribution();       // [5 => 120, 4 => 80, ...]
+Reviews::for($product)->photoCount();         // photos on approved reviews
+Reviews::for($product)->reviewsWithPhotos();  // approved reviews that carry a photo
+Reviews::for($product)->query()->approved()->mostHelpful()->paginate();
+
+// Every review (swap-aware) — e.g. the moderation queue
+Reviews::query()->pending()->latestFirst()->paginate();
+
+// Act on one review
+Reviews::create(new CreateReviewData(author: $user, reviewable: $product, rating: 5));
+Reviews::approve($review);
+Reviews::reject($review, 'Spam');
+Reviews::update($review, new UpdateReviewData(content: 'Edited'));
+Reviews::delete($review);
+Reviews::respond($review, $owner, 'Thanks!');
+Reviews::vote($review, $user, helpful: true);
+Reviews::removeVote($review, $user);
+Reviews::verify($review);
+Reviews::unverify($review);
+
+// Tests
+$fake = Reviews::fake();
+```
+
+| Method | Returns | Does |
+|---|---|---|
+| `for(Model $reviewable)` | `ReviewableScope` | Scopes the calls below to one subject. |
+| `for(…)->by(Model $author)` | `PendingReview` | Starts a review of the subject; finish with `->create()`. |
+| `for(…)->summary()` / `average()` / `count()` / `distribution()` / `photoCount()` / `reviewsWithPhotos()` | aggregates | Approved, top-level reviews of the subject only. |
+| `for(…)->query()` | `Builder<Review>` | The subject's top-level reviews, every status (responses via `$review->responses`). |
+| `query()` | `Builder<Review>` | Every review on the configured model — every subject, status and response. |
+| `create(CreateReviewData $data)` | `Review` | Creates a review from a DTO (the builder's terminal step). |
+| `approve()` / `reject()` / `update()` / `delete()` | `Review` / `void` | The moderation lifecycle. |
+| `respond(Review, Model $author, string $content, ?string $title)` | `Review` | Creates an owner response. |
+| `vote(Review, Model $voter, bool $helpful)` / `removeVote(Review, Model $voter)` | `ReviewVote` / `void` | Helpful votes. |
+| `verify(Review)` / `unverify(Review)` | `Review` | Sets / clears the verified flag; fires `ReviewVerified`. |
+| `fake()` | `ReviewsFake` | Swaps in the recording fake (see [Testing](#testing-your-app)). |
+
+### Without the facade
+
+The facade is sugar over `RoundlyConsulting\Reviews\ReviewsManager` — inject it and call the
+same API:
+
+```php
+use RoundlyConsulting\Reviews\ReviewsManager;
+
+final class ProductReviewController
+{
+    public function __construct(private ReviewsManager $reviews) {}
+
+    public function store(Product $product, Request $request): Review
+    {
+        return $this->reviews->for($product)->by($request->user())->rating(5)->create();
+    }
+}
+```
+
+Or call the action behind a method directly — each is a small class resolved from the
+container (`CreateReview`, `ApproveReview`, `RejectReview`, `UpdateReview`, `DeleteReview`,
+`RespondToReview`, `VoteOnReview`, `RemoveReviewVote`, `MarkReviewVerified`):
+
+```php
+use RoundlyConsulting\Reviews\Actions\CreateReview;
+use RoundlyConsulting\Reviews\Actions\MarkReviewVerified;
+use RoundlyConsulting\Reviews\DataTransferObjects\CreateReviewData;
+
+$review = app(CreateReview::class)->execute(new CreateReviewData(
+    author: $user,
+    reviewable: $restaurant,
+    content: 'Great place',
+    title: 'Loved it',
+    rating: 5,
+    meta: collect(['visit' => 'dinner']),
+));
+
+app(MarkReviewVerified::class)->execute($review, verified: true);
+```
+
+All three forms run the same code. Model helpers (`$review->respond()`,
+`$review->markVerified()`, `$user->voteOn()`, `$product->addReview()`) delegate to the manager
+too, so `Reviews::fake()` sees them.
+
 ### Add the traits to your models
 
 Mark a subject as reviewable and an author as a reviewer with one trait each:
@@ -243,22 +337,8 @@ A review must have **either** a rating **or** content — an empty review throws
 `InvalidReviewException`. A rating outside the configured range throws
 `InvalidRatingException`.
 
-The underlying `CreateReview` action and `CreateReviewData` DTO remain available if you prefer
-to call them directly:
-
-```php
-use RoundlyConsulting\Reviews\Actions\CreateReview;
-use RoundlyConsulting\Reviews\DataTransferObjects\CreateReviewData;
-
-$review = app(CreateReview::class)->execute(new CreateReviewData(
-    author: $user,
-    reviewable: $restaurant,
-    content: 'Great place',
-    title: 'Loved it',
-    rating: 5,
-    meta: collect(['visit' => 'dinner']),
-));
-```
+The subject and author are fixed once `by()` returns the builder, so it can't be re-pointed at
+another subject. `Reviews::create(new CreateReviewData(...))` is the same operation in one call.
 
 ### Review photos
 
@@ -349,7 +429,20 @@ approved review back to `pending` for re-moderation.
 
 ### Ratings & aggregates
 
-All aggregates count **approved** reviews only.
+All aggregates count **approved**, top-level reviews only (owner responses never count).
+
+```php
+$reviews = Reviews::for($restaurant);
+
+$reviews->average();                  // ?float, null when none
+$reviews->count();                    // int (approved)
+$reviews->distribution();             // [5 => 120, 4 => 80, ...]
+$reviews->photoCount();               // total photos on approved reviews
+$reviews->reviewsWithPhotos();        // approved reviews that carry a photo
+$reviews->summary();                  // RatingSummary DTO — all of the above
+```
+
+The `HasReviews` trait offers the same aggregates on the model:
 
 ```php
 $restaurant->reviews;                 // MorphMany (all)
@@ -364,18 +457,8 @@ $restaurant->ratingSummary();         // RatingSummary DTO
 $restaurant->addReview($user)->rating(5)->content('...')->create();
 ```
 
-`ratingSummary()` returns a `RatingSummary` DTO (`average`, `count`, `distribution`,
-`photoCount`, `reviewsWithPhotos`) with a `toArray()` for JSON responses. The same aggregates
-are available on the facade:
-
-```php
-Reviews::averageFor($restaurant);
-Reviews::countFor($restaurant);
-Reviews::distributionFor($restaurant);
-Reviews::summaryFor($restaurant);
-Reviews::photoCountFor($restaurant);         // total photos on approved reviews
-Reviews::reviewsWithPhotosFor($restaurant);  // approved reviews that carry a photo
-```
+`summary()` / `ratingSummary()` return a `RatingSummary` DTO (`average`, `count`,
+`distribution`, `photoCount`, `reviewsWithPhotos`) with a `toArray()` for JSON responses.
 
 ### Authoring lookups
 
@@ -385,7 +468,15 @@ $user->hasReviewed($restaurant);      // bool
 $user->reviewFor($restaurant);        // ?Review
 ```
 
-### Query scopes
+### Listing reviews & query scopes
+
+List one subject's reviews, or every review (a moderation queue), through the facade — both
+respect a swapped `reviews.model`:
+
+```php
+Reviews::for($restaurant)->query()->approved()->mostHelpful()->paginate();  // top-level only
+Reviews::query()->pending()->latestFirst()->paginate();                     // every subject
+```
 
 The `Review` model ships expressive scopes:
 
@@ -410,12 +501,20 @@ Review::query()->mostHelpful()->get();            // by net helpful score
 ### Verified reviews
 
 A `verified` boolean marks verified purchases / verified reviewers. Set it on create with
-`->verified()`, in an `UpdateReviewData(verified: true)`, or with the model helpers:
+`->verified()`, or flip it later:
 
 ```php
+Reviews::verify($review);
+Reviews::unverify($review);
+
+// or the model helpers (they call the same manager methods):
 $review->markVerified();
 $review->markUnverified();
 ```
+
+Both are idempotent and dispatch `ReviewVerified` (with `bool $verified`, the new state) only
+when the flag actually changes. `UpdateReviewData(verified: true)` also sets it, as part of an
+update (firing `ReviewUpdated` instead).
 
 ### Helpful votes
 
@@ -507,6 +606,7 @@ modifying the package:
 | `ReviewResponded` | an owner response is created (carries `parent` and `response`) |
 | `ReviewVoted` | a helpful vote is cast or flipped (carries the `vote`) |
 | `ReviewVoteRemoved` | a helpful vote is withdrawn (carries the `voter`) |
+| `ReviewVerified` | the verified flag changes (carries `bool $verified`, the new state) |
 
 ```php
 use Illuminate\Support\Facades\Event;
@@ -569,7 +669,7 @@ customise the fields.
 
 ### Custom verbs (macros)
 
-The `Reviews` manager is `Macroable`, so host apps can register their own facade verbs:
+`ReviewsManager` is `Macroable`, so host apps can register their own facade verbs:
 
 ```php
 use RoundlyConsulting\Reviews\Facades\Reviews;
@@ -579,23 +679,42 @@ Reviews::macro('flagged', fn () => Review::query()->rejected()->get());
 Reviews::flagged();
 ```
 
-### Testing
+### Testing your app
 
-Swap in a recording fake — operations still run, while assertions verify intent:
+`Reviews::fake()` swaps in a recording `ReviewsFake` (a subtype of `ReviewsManager`, so an
+injected manager gets it too). Operations still run against the database, while every mutation
+is recorded — whether it came through the facade, an injected manager, a `for()->by()` builder,
+the `HasReviews` / `CanVoteOnReviews` traits, or a `Review` model method:
 
 ```php
 use RoundlyConsulting\Reviews\Facades\Reviews;
 
 $fake = Reviews::fake();
 
-Reviews::for($product)->by($user)->rating(5)->create();
+$product->addReview($user)->rating(5)->create();
+$review->respond($owner, 'Thanks!');
 
 $fake->assertReviewCreated();
-$fake->assertReviewCreated(fn ($review) => $review->rating === 5);
-$fake->assertReviewApproved();
-$fake->assertReviewRejected();
-$fake->assertNothingReviewed();
+$fake->assertReviewCreated(fn (Review $review) => $review->rating === 5);
+$fake->assertReviewResponded(fn (Review $response, Review $parent) => $parent->is($review));
+$fake->assertNothingApproved();
 ```
+
+| Assert | Opposite | Callback receives |
+|---|---|---|
+| `assertReviewCreated()` | `assertNothingReviewed()` | the review |
+| `assertReviewApproved()` | `assertNothingApproved()` | the review |
+| `assertReviewRejected()` | `assertNothingRejected()` | the review |
+| `assertReviewUpdated()` | `assertNothingUpdated()` | the review |
+| `assertReviewDeleted()` | `assertNothingDeleted()` | the review |
+| `assertReviewResponded()` | `assertNothingResponded()` | the response, the parent review |
+| `assertReviewVoted()` | `assertNothingVoted()` | the review, the voter |
+| `assertReviewVoteRemoved()` | `assertNoVoteRemoved()` | the review, the voter |
+| `assertReviewVerified()` | `assertNothingVerified()` | the review |
+| `assertReviewUnverified()` | `assertNothingUnverified()` | the review |
+
+Every `assert*()` takes an optional callback and passes when at least one recorded call
+returns `true`.
 
 Register the Pest expectation matchers in your `tests/Pest.php`:
 
