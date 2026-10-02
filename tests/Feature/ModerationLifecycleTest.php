@@ -9,8 +9,11 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use RoundlyConsulting\Reviews\Contracts\ReviewModerator;
 use RoundlyConsulting\Reviews\DataTransferObjects\ModerationOutcome;
+use RoundlyConsulting\Reviews\DataTransferObjects\UpdateReviewData;
+use RoundlyConsulting\Reviews\Enums\ReviewStatus;
 use RoundlyConsulting\Reviews\Events\ReviewApproved;
 use RoundlyConsulting\Reviews\Events\ReviewRejected;
+use RoundlyConsulting\Reviews\Events\ReviewUpdated;
 use RoundlyConsulting\Reviews\Facades\Reviews;
 use RoundlyConsulting\Reviews\Listeners\WarmReviewPhotoVariants;
 use RoundlyConsulting\Reviews\Models\Review;
@@ -53,6 +56,15 @@ function recordingModerator(callable $decide): ArrayObject
     });
 
     return $seen;
+}
+
+function approvedReview(array $attributes = []): Review
+{
+    return Review::factory()
+        ->approved()
+        ->forReviewable(Product::query()->create())
+        ->byAuthor(Entity::query()->create())
+        ->create($attributes);
 }
 
 describe('on create', function (): void {
@@ -126,5 +138,99 @@ describe('on create', function (): void {
             ->create();
 
         Queue::assertPushed(CallQueuedListener::class, fn (CallQueuedListener $job): bool => $job->class === WarmReviewPhotoVariants::class);
+    });
+});
+
+describe('on edit', function (): void {
+    it('runs the moderator again on an edited review', function (): void {
+        $review = Review::factory()->pending()->create();
+        $seen = recordingModerator(fn (): ModerationOutcome => ModerationOutcome::approve());
+        Event::fake([ReviewApproved::class]);
+
+        $updated = Reviews::update($review, new UpdateReviewData(content: 'Edited'));
+
+        expect($updated->status)->toBe(ReviewStatus::Approved)
+            ->and($updated->approved_at)->not->toBeNull()
+            ->and($seen)->toHaveCount(1)
+            ->and($seen[0]['exists'])->toBeTrue();
+        Event::assertDispatchedTimes(ReviewApproved::class, 1);
+    });
+
+    it('keeps an approved review live under auto_approve', function (): void {
+        config()->set('reviews.auto_approve', true);
+        $review = approvedReview(['approved_at' => now()->subDay()]);
+        $approvedAt = $review->approved_at;
+        Event::fake([ReviewApproved::class]);
+
+        $updated = Reviews::update($review, new UpdateReviewData(content: 'Typo fixed'));
+
+        expect($updated->status)->toBe(ReviewStatus::Approved)
+            ->and($updated->approved_at?->equalTo($approvedAt))->toBeTrue();
+        // Already approved: no transition, so nothing to announce.
+        Event::assertNotDispatched(ReviewApproved::class);
+    });
+
+    it('rejects an edit that introduces a banned word', function (bool $reset): void {
+        config()->set('reviews.reset_status_on_edit', $reset);
+        config()->set('reviews.moderator', WordListModerator::class);
+        config()->set('reviews.moderation.banned_words', ['scam']);
+        $review = approvedReview(['content' => 'Clean words']);
+        Event::fake([ReviewRejected::class]);
+
+        $updated = Reviews::update($review, new UpdateReviewData(content: 'Actually a scam'));
+
+        expect($updated->status)->toBe(ReviewStatus::Rejected)
+            ->and($updated->approved_at)->toBeNull()
+            ->and($updated->meta?->get('rejection_reason'))->not->toBeNull()
+            ->and($updated->fresh()?->status)->toBe(ReviewStatus::Rejected);
+        Event::assertDispatched(ReviewRejected::class, fn (ReviewRejected $event): bool => $event->review->is($review) && $event->reason !== null);
+    })->with(['reset_status_on_edit on' => true, 'reset_status_on_edit off' => false]);
+
+    it('catches a banned word edited into the title', function (): void {
+        config()->set('reviews.moderator', WordListModerator::class);
+        config()->set('reviews.moderation.banned_words', ['scam']);
+        $review = approvedReview();
+
+        $updated = Reviews::update($review, new UpdateReviewData(title: 'Total scam'));
+
+        expect($updated->status)->toBe(ReviewStatus::Rejected);
+    });
+
+    it('never resurrects a rejected review', function (): void {
+        $review = Reviews::reject(approvedReview(), 'Spam');
+        $seen = recordingModerator(fn (): ModerationOutcome => ModerationOutcome::approve());
+
+        $updated = Reviews::update($review, new UpdateReviewData(content: 'Please let me back in', rating: 5));
+
+        expect($updated->status)->toBe(ReviewStatus::Rejected)
+            ->and($updated->meta?->get('rejection_reason'))->toBe('Spam')
+            ->and($updated->content)->toBe('Please let me back in')
+            ->and($seen)->toHaveCount(0)
+            ->and(Reviews::query()->pending()->count())->toBe(0);
+    });
+
+    it('never pulls an owner response into the moderation queue', function (): void {
+        $response = Reviews::respond(approvedReview(), Entity::query()->create(), 'Thanks!');
+        $seen = recordingModerator(fn (): ModerationOutcome => ModerationOutcome::pending());
+
+        $updated = Reviews::update($response, new UpdateReviewData(content: 'Thanks a lot!'));
+
+        expect($updated->status)->toBe(ReviewStatus::Approved)
+            ->and($updated->approved_at)->not->toBeNull()
+            ->and($seen)->toHaveCount(0)
+            ->and(Reviews::query()->pending()->count())->toBe(0);
+    });
+
+    it('leaves the status alone when nothing moderated changed', function (): void {
+        $review = approvedReview(['content' => 'Same words', 'rating' => 4]);
+        $seen = recordingModerator(fn (): ModerationOutcome => ModerationOutcome::reject('should not run'));
+        Event::fake([ReviewUpdated::class]);
+
+        $updated = Reviews::update($review, new UpdateReviewData(content: 'Same words', rating: 4, verified: true));
+
+        expect($updated->status)->toBe(ReviewStatus::Approved)
+            ->and($updated->verified)->toBeTrue()
+            ->and($seen)->toHaveCount(0);
+        Event::assertDispatched(ReviewUpdated::class);
     });
 });

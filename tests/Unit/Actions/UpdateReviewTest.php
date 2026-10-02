@@ -60,10 +60,19 @@ it('keeps the status when re-moderation is disabled', function (): void {
     expect($updated->status)->toBe(ReviewStatus::Approved);
 });
 
-it('does not re-moderate a title-only edit', function (): void {
+it('re-moderates a title edit too', function (): void {
+    // The title is shown and screened (the word-list moderator reads it) like the content.
     $review = Review::factory()->approved()->create();
 
     $updated = $this->action->execute($review, new UpdateReviewData(title: 'Just the title'));
+
+    expect($updated->status)->toBe(ReviewStatus::Pending);
+});
+
+it('does not re-moderate a meta-only edit', function (): void {
+    $review = Review::factory()->approved()->create();
+
+    $updated = $this->action->execute($review, new UpdateReviewData(meta: collect(['source' => 'import'])));
 
     expect($updated->status)->toBe(ReviewStatus::Approved);
 });

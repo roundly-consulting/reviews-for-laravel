@@ -34,3 +34,13 @@ it('is idempotent when already approved', function (): void {
 
     Event::assertNotDispatched(ReviewApproved::class);
 });
+
+it('drops the stale rejection reason when approving a rejected review', function (): void {
+    $review = Review::factory()->rejected()->create(['meta' => ['rejection_reason' => 'Spam', 'source' => 'app']]);
+
+    $approved = $this->action->execute($review);
+
+    expect($approved->meta?->has('rejection_reason'))->toBeFalse()
+        ->and($approved->meta?->get('source'))->toBe('app')
+        ->and($approved->fresh()?->meta?->has('rejection_reason'))->toBeFalse();
+});

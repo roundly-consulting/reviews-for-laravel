@@ -19,6 +19,12 @@ final readonly class ApproveReview
 
         $review->status = ReviewStatus::Approved;
         $review->approved_at = CarbonImmutable::now();
+
+        // A reason for a rejection that no longer stands would only mislead whoever reads it.
+        if ($review->meta?->has('rejection_reason') === true) {
+            $review->meta = $review->meta->except('rejection_reason');
+        }
+
         $review->save();
 
         ReviewApproved::dispatch($review);
