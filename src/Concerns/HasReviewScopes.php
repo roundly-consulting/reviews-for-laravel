@@ -86,11 +86,23 @@ trait HasReviewScopes
     }
 
     /**
+     * Most recently approved first, then never-approved (pending/rejected) reviews, each group
+     * newest first.
+     *
+     * The NULL rank is explicit because engines disagree on where NULLs sort: pgsql puts them
+     * first under DESC, sqlite and mysql last — so a mixed-status list would otherwise open with
+     * the pending reviews on postgres only. A CASE (not `IS NULL` as a sort key) keeps it valid
+     * on every grammar.
+     *
      * @param  Builder<static>  $query
      */
     public function scopeLatestFirst(Builder $query): void
     {
-        $query->orderByDesc('approved_at')->orderByDesc('created_at');
+        $approvedAt = $query->getQuery()->getGrammar()->wrap($query->qualifyColumn('approved_at'));
+
+        $query->orderBy(new RawExpression("case when {$approvedAt} is null then 1 else 0 end"))
+            ->orderByDesc($query->qualifyColumn('approved_at'))
+            ->orderByDesc($query->qualifyColumn('created_at'));
     }
 
     /**

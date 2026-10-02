@@ -507,6 +507,7 @@ The `Review` model ships expressive scopes:
 use RoundlyConsulting\Reviews\Models\Review;
 
 Review::query()->approved()->latestFirst()->get();
+Review::query()->latestFirst()->get();            // newest approval first, never-approved last
 Review::query()->pending()->get();
 Review::query()->rejected()->get();
 Review::query()->rated()->get();                  // has a rating
