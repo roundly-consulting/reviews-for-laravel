@@ -125,11 +125,11 @@ return [
     'min_rating' => (int) env('REVIEWS_MIN_RATING', 1),
     'max_rating' => (int) env('REVIEWS_MAX_RATING', 5),
 
-    // The status a new review receives, and whether to approve immediately.
+    // Where the moderator's "undecided" leaves a review, and whether to approve immediately.
     'default_status' => ReviewStatus::Pending->value,
     'auto_approve' => (bool) env('REVIEWS_AUTO_APPROVE', false),
 
-    // Send a review back to "pending" when its rating or content is edited.
+    // Re-moderate an edit to the rating, title or content; undecided → back to default_status.
     'reset_status_on_edit' => (bool) env('REVIEWS_RESET_STATUS_ON_EDIT', true),
 
     // Allow at most one (non-deleted) review per author per subject.
@@ -138,7 +138,7 @@ return [
     // Register a global "Reviews" facade alias.
     'register_facade_alias' => (bool) env('REVIEWS_REGISTER_FACADE_ALIAS', true),
 
-    // The ReviewModerator consulted when a new review is created.
+    // The ReviewModerator consulted when a review is created or its text/rating is edited.
     'moderator' => NullModerator::class,
     'moderation' => [
         'banned_words' => array_values(array_filter(array_map(
@@ -174,12 +174,12 @@ return [
 | `vote_model` | `class-string` | `ReviewVote::class` | — | Model used for helpful votes; extend it for custom behaviour. |
 | `min_rating` | `int` | `1` | `REVIEWS_MIN_RATING` | Lowest allowed rating value. |
 | `max_rating` | `int` | `5` | `REVIEWS_MAX_RATING` | Highest allowed rating value. |
-| `default_status` | `string` | `pending` | — | Status a new review receives when not auto-approved. |
-| `auto_approve` | `bool` | `false` | `REVIEWS_AUTO_APPROVE` | Approve new reviews immediately. |
-| `reset_status_on_edit` | `bool` | `true` | `REVIEWS_RESET_STATUS_ON_EDIT` | Re-moderate a review when its rating/content changes. |
+| `default_status` | `string` | `pending` | — | Status a review lands in when the moderator leaves it undecided (and auto-approve is off). |
+| `auto_approve` | `bool` | `false` | `REVIEWS_AUTO_APPROVE` | Approve new — and re-moderated, edited — reviews immediately, skipping the moderator. |
+| `reset_status_on_edit` | `bool` | `true` | `REVIEWS_RESET_STATUS_ON_EDIT` | On an edit to the rating/title/content, send an undecided review back to `default_status` (`false`: keep its status). The moderator re-runs either way. |
 | `one_per_author` | `bool` | `false` | `REVIEWS_ONE_PER_AUTHOR` | Block a second review by the same author for the same subject. |
 | `register_facade_alias` | `bool` | `true` | `REVIEWS_REGISTER_FACADE_ALIAS` | Register the global `Reviews` alias. |
-| `moderator` | `class-string` | `NullModerator::class` | — | `ReviewModerator` consulted on create; swap in `WordListModerator` or your own. |
+| `moderator` | `class-string` | `NullModerator::class` | — | `ReviewModerator` consulted on create and on edits to the rating/title/content; swap in `WordListModerator` or your own. |
 | `moderation.banned_words` | `list<string>` | `[]` | `REVIEWS_BANNED_WORDS` | Comma-separated words the `WordListModerator` rejects on. |
 | `cache_aggregates` | `bool` | `false` | `REVIEWS_CACHE_AGGREGATES` | Maintain cached `reviews_count` / `reviews_avg` on opted-in reviewables. |
 | `photos.enabled` | `bool` | `true` | `REVIEWS_PHOTOS_ENABLED` | Master switch for review photos; when `false`, `withPhoto()` throws and the bucket is never declared. |
@@ -393,8 +393,10 @@ and produces responsive variants for the configured `responsive_widths`. Exceedi
 throws `InvalidReviewException::tooManyPhotos()`. When `photos.enabled` is `false`, the bucket is
 never declared and `withPhoto()` throws `InvalidReviewException::photosDisabled()`.
 
-Photos are warmed on approval (a queued variant-generation job per photo, via
-`ReviewApproved`) and cleaned up when a review is **force-deleted** — a soft-deleted (and later
+Photos are warmed when a review becomes approved: a `ReviewApproved` listener queues one
+variant-generation job per photo. That event fires however the review got there — `approve()`,
+an approval on create (`->approved()`, `auto_approve` or the moderator), or re-moderation after
+an edit. Photos are cleaned up when a review is **force-deleted** — a soft-deleted (and later
 restored) review keeps its photos. The rating summary also reports `photoCount` and
 `reviewsWithPhotos` across a subject's approved reviews (see below), and `ReviewResource`
 exposes a `photos` array of `{ id, url, srcset }`.
@@ -402,7 +404,9 @@ exposes a `photos` array of `{ id, url, srcset }`.
 ### Moderation lifecycle
 
 Every review has a `ReviewStatus` of `Pending`, `Approved`, or `Rejected`. New reviews are
-`pending` unless `auto_approve` is enabled.
+`pending` (the `default_status`) unless they are force-approved (`->approved()`),
+`auto_approve` is enabled, or the moderator decides otherwise (see
+[Auto-moderation](#auto-moderation)).
 
 `ReviewStatus` and `ModerationDecision` adopt the `enums-for-laravel` helpers, so you get
 `ReviewStatus::values()`, `->labels()`, `->options()`, `->toOptions()`, `->validationRule()`
@@ -417,7 +421,9 @@ $review->isApproved();
 $review->isRejected();
 ```
 
-Approve/reject are idempotent. Each fires an event (see below).
+Approve/reject are idempotent. Each fires an event (see below) — and so does a review that
+lands approved or rejected on create or after an edit. Approving a rejected review drops its
+stale `rejection_reason`.
 
 ### Update & delete
 
@@ -430,8 +436,16 @@ Reviews::update($review, new UpdateReviewData(content: 'Edited', rating: 4));
 Reviews::delete($review);             // soft-deletes
 ```
 
-When `reset_status_on_edit` is enabled (default), editing the rating or content sends an
-approved review back to `pending` for re-moderation.
+An edit that changes the rating, title or content is **re-moderated** through the same
+pipeline as a new review: `auto_approve`, then the configured moderator. An approve or reject
+decision applies (firing `ReviewApproved` / `ReviewRejected` when the status changes). An
+undecided outcome sends the review back to `default_status` (`pending`) when
+`reset_status_on_edit` is enabled (default), or keeps its current status when it is disabled —
+so a banned word can't be edited into a live review either way. Edits to `meta` or `verified`
+alone aren't re-moderated.
+
+Two kinds of review are never re-moderated: a **rejected** review stays rejected (reason kept)
+until you `approve()` it, and an owner **response** stays approved — it never enters the queue.
 
 ### Ratings & aggregates
 
@@ -605,8 +619,8 @@ modifying the package:
 | Event | Dispatched when |
 |---|---|
 | `ReviewCreated` | a review is created |
-| `ReviewApproved` | a review is approved |
-| `ReviewRejected` | a review is rejected (carries `?string $reason`) |
+| `ReviewApproved` | a review becomes approved — by `approve()`, on create, or by re-moderation after an edit |
+| `ReviewRejected` | a review becomes rejected — by `reject()`, by the moderator on create or after an edit (carries `?string $reason`) |
 | `ReviewUpdated` | a review is updated |
 | `ReviewDeleted` | a review is soft-deleted |
 | `ReviewResponded` | an owner response is created (carries `parent` and `response`) |
@@ -632,8 +646,11 @@ All package exceptions extend `RoundlyConsulting\Reviews\Exceptions\ReviewExcept
 
 ### Auto-moderation
 
-New reviews (that aren't force-approved) are passed through the configured `ReviewModerator`.
-The default `NullModerator` leaves them at the default status. The bundled, dependency-free
+New reviews (that aren't force-approved) are passed through the configured `ReviewModerator`,
+and so are edits to a review's rating, title or content (see [Update & delete](#update--delete)).
+The moderator sees the whole review — `$review->author` and `$review->reviewable` are already
+set, and `$review->exists` tells a create from an edit. The default `NullModerator` leaves
+reviews at the default status. The bundled, dependency-free
 `WordListModerator` auto-rejects reviews containing any banned word (whole-word,
 case-insensitive):
 

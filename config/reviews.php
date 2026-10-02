@@ -61,9 +61,11 @@ return [
     | Moderation
     |--------------------------------------------------------------------------
     |
-    | "default_status" is the status a freshly created review receives.
-    | "auto_approve" short-circuits moderation: new reviews are approved
-    | immediately (and stamped with approved_at) when enabled.
+    | "default_status" is the status a review lands in when the moderator
+    | leaves it undecided. "auto_approve" short-circuits the moderator: new
+    | (and re-moderated, edited) reviews are approved immediately and stamped
+    | with approved_at. However a review lands approved or rejected, the
+    | ReviewApproved / ReviewRejected event fires for it.
     |
     */
 
@@ -76,8 +78,13 @@ return [
     | Re-moderation on Edit
     |--------------------------------------------------------------------------
     |
-    | When enabled, editing a review's rating or content sends it back to the
-    | pending queue so the change can be re-moderated before it is shown again.
+    | An edit that changes a review's rating, title or content is moderated
+    | again: auto_approve, then the moderator. When enabled, an undecided
+    | outcome sends the review back to "default_status" (the pending queue)
+    | so a human sees the change before it is shown again; when disabled, an
+    | undecided outcome keeps its status. Either way a moderator's approve or
+    | reject applies. Rejected reviews stay rejected until approved explicitly,
+    | and owner responses are never re-moderated.
     |
     */
 
@@ -115,9 +122,10 @@ return [
     |--------------------------------------------------------------------------
     |
     | The ReviewModerator implementation bound into the container and consulted
-    | when a new (non force-approved) review is created. The default no-op
-    | moderator leaves reviews at their default status. Swap in WordListModerator
-    | (or your own) to auto-approve/auto-reject. Banned words feed the bundled
+    | when a new (non force-approved) review is created, and again when an edit
+    | changes its rating, title or content. The default no-op moderator leaves
+    | reviews at their default status. Swap in WordListModerator (or your own)
+    | to auto-approve/auto-reject. Banned words feed the bundled
     | WordListModerator and are matched case-insensitively as whole words.
     |
     */
