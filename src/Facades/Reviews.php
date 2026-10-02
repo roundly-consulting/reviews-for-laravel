@@ -25,7 +25,7 @@ use RoundlyConsulting\Reviews\Testing\ReviewsFake;
  * @method static void delete(Review $review)
  * @method static Review respond(Review $review, Model $author, string $content, ?string $title = null)
  * @method static ReviewVote vote(Review $review, Model $voter, bool $helpful = true)
- * @method static void removeVote(Review $review, Model $voter)
+ * @method static bool removeVote(Review $review, Model $voter)
  * @method static Review verify(Review $review)
  * @method static Review unverify(Review $review)
  *

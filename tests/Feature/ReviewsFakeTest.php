@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Database\Eloquent\Model;
 use PHPUnit\Framework\AssertionFailedError;
+use RoundlyConsulting\Reviews\Actions\VoteOnReview;
 use RoundlyConsulting\Reviews\DataTransferObjects\CreateReviewData;
 use RoundlyConsulting\Reviews\DataTransferObjects\UpdateReviewData;
 use RoundlyConsulting\Reviews\Facades\Reviews;
@@ -87,7 +88,8 @@ dataset('recorded operations', fn (): array => [
         'assertNothingVoted',
     ],
     'remove a vote' => [
-        fn (Review $review) => Reviews::removeVote($review, Voter::query()->create()),
+        // Seeded through the action, so the only recorded call is the removal itself.
+        fn (Review $review) => Reviews::removeVote($review, tap(Voter::query()->create(), fn (Voter $voter) => app(VoteOnReview::class)->execute($review, $voter))),
         'assertReviewVoteRemoved',
         fn (Review $review, Model $voter): bool => $voter instanceof Voter,
         'assertNoVoteRemoved',
@@ -141,6 +143,45 @@ it('fails each assertNothing* once the operation was recorded', function (Closur
 
     expect(fn () => $fake->{$assertNothing}())->toThrow(AssertionFailedError::class, 'but 1 were');
 })->with('recorded operations');
+
+it('records nothing for a call that changed nothing', function (Closure $noop, string $assertNothing): void {
+    // The real actions return early on these — no write, no event — so there is nothing to assert.
+    $fake = Reviews::fake();
+
+    $noop();
+
+    $fake->{$assertNothing}();
+})->with([
+    'approving an approved review' => [fn () => Reviews::approve(Review::factory()->approved()->create()), 'assertNothingApproved'],
+    'rejecting a rejected review' => [fn () => Reviews::reject(Review::factory()->rejected()->create(), 'again'), 'assertNothingRejected'],
+    'verifying a verified review' => [fn () => Reviews::verify(Review::factory()->create(['verified' => true])), 'assertNothingVerified'],
+    'unverifying an unverified review' => [fn () => Reviews::unverify(Review::factory()->create(['verified' => false])), 'assertNothingUnverified'],
+    'removing a vote never cast' => [fn () => Reviews::removeVote(Review::factory()->create(), Voter::query()->create()), 'assertNoVoteRemoved'],
+    'withdrawing via CanVoteOnReviews with no vote' => [fn () => Voter::query()->create()->removeVoteFrom(Review::factory()->create()), 'assertNoVoteRemoved'],
+]);
+
+it('records a real transition after a no-op one', function (): void {
+    $fake = Reviews::fake();
+    $review = Review::factory()->rejected()->create();
+
+    Reviews::reject($review, 'again');
+    $fake->assertNothingRejected();
+
+    Reviews::approve($review);
+    $fake->assertReviewApproved(fn (Review $approved): bool => $approved->is($review));
+});
+
+it('tells whether a vote was removed', function (): void {
+    $review = Review::factory()->create();
+    $voter = Voter::query()->create();
+
+    expect(Reviews::removeVote($review, $voter))->toBeFalse()
+        ->and($voter->removeVoteFrom($review))->toBeFalse();
+
+    Reviews::vote($review, $voter);
+
+    expect($voter->removeVoteFrom($review))->toBeTrue();
+});
 
 it('keeps each operation in its own bucket', function (): void {
     $fake = Reviews::fake();

@@ -102,9 +102,10 @@ class ReviewsManager
         return $this->container->make(VoteOnReview::class)->execute($review, $voter, $helpful);
     }
 
-    public function removeVote(Review $review, Model $voter): void
+    /** Withdraw a voter's vote. Idempotent: false when there was no vote to remove. */
+    public function removeVote(Review $review, Model $voter): bool
     {
-        $this->container->make(RemoveReviewVote::class)->execute($review, $voter);
+        return $this->container->make(RemoveReviewVote::class)->execute($review, $voter);
     }
 
     /** Flag a review as verified (a verified purchase / reviewer). Idempotent. */

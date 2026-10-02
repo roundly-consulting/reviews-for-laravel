@@ -42,12 +42,16 @@ final class ReviewsFake extends ReviewsManager
 
     public function approve(Review $review): Review
     {
-        return $this->record('approved', parent::approve($review));
+        $changes = ! $review->isApproved();
+
+        return $this->recordIf($changes, 'approved', parent::approve($review));
     }
 
     public function reject(Review $review, ?string $reason = null): Review
     {
-        return $this->record('rejected', parent::reject($review, $reason));
+        $changes = ! $review->isRejected();
+
+        return $this->recordIf($changes, 'rejected', parent::reject($review, $reason));
     }
 
     public function update(Review $review, UpdateReviewData $data): Review
@@ -76,21 +80,27 @@ final class ReviewsFake extends ReviewsManager
         return $vote;
     }
 
-    public function removeVote(Review $review, Model $voter): void
+    public function removeVote(Review $review, Model $voter): bool
     {
-        parent::removeVote($review, $voter);
+        $removed = parent::removeVote($review, $voter);
 
-        $this->record('voteRemoved', $review, $voter);
+        $this->recordIf($removed, 'voteRemoved', $review, $voter);
+
+        return $removed;
     }
 
     public function verify(Review $review): Review
     {
-        return $this->record('verified', parent::verify($review));
+        $changes = ! $review->verified;
+
+        return $this->recordIf($changes, 'verified', parent::verify($review));
     }
 
     public function unverify(Review $review): Review
     {
-        return $this->record('unverified', parent::unverify($review));
+        $changes = $review->verified;
+
+        return $this->recordIf($changes, 'unverified', parent::unverify($review));
     }
 
     public function assertReviewCreated(?callable $callback = null): void
@@ -194,6 +204,17 @@ final class ReviewsFake extends ReviewsManager
     public function assertNothingUnverified(): void
     {
         $this->assertNothingRecorded('unverified', 'no review to be unverified');
+    }
+
+    /**
+     * Record only a call that really changed something. Approve, reject, verify, unverify and
+     * removeVote are idempotent: on a review already in the target state (or with no vote to
+     * remove) the real action returns early — no write, no event — so the fake records nothing
+     * and `assert*()` cannot pass over a call that did nothing.
+     */
+    private function recordIf(bool $changed, string $kind, Review $review, ?Model $party = null): Review
+    {
+        return $changed ? $this->record($kind, $review, $party) : $review;
     }
 
     private function record(string $kind, Review $review, ?Model $party = null): Review

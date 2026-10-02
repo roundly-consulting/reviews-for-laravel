@@ -20,7 +20,8 @@ final readonly class RemoveReviewVote
         private RecountReviewVotes $recount,
     ) {}
 
-    public function execute(Review $review, Model $voter): void
+    /** @return bool Whether a vote was removed. */
+    public function execute(Review $review, Model $voter): bool
     {
         $deleted = $this->recount->execute($review, static fn (): int => (int) ReviewVoteModel::query()
             ->where('review_id', $review->getKey())
@@ -29,9 +30,11 @@ final readonly class RemoveReviewVote
             ->delete());
 
         if ($deleted === 0) {
-            return;
+            return false;
         }
 
         ReviewVoteRemoved::dispatch($review, $voter);
+
+        return true;
     }
 }

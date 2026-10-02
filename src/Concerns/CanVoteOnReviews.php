@@ -23,9 +23,10 @@ trait CanVoteOnReviews
         return app(ReviewsManager::class)->vote($review, $this, $helpful);
     }
 
-    public function removeVoteFrom(Review $review): void
+    /** Withdraw this model's vote; false when it had none. */
+    public function removeVoteFrom(Review $review): bool
     {
-        app(ReviewsManager::class)->removeVote($review, $this);
+        return app(ReviewsManager::class)->removeVote($review, $this);
     }
 
     public function hasVotedOn(Review $review): bool

@@ -243,7 +243,7 @@ $fake = Reviews::fake();
 | `create(CreateReviewData $data)` | `Review` | Creates a review from a DTO (the builder's terminal step). |
 | `approve()` / `reject()` / `update()` / `delete()` | `Review` / `void` | The moderation lifecycle. |
 | `respond(Review, Model $author, string $content, ?string $title)` | `Review` | Creates an owner response. |
-| `vote(Review, Model $voter, bool $helpful)` / `removeVote(Review, Model $voter)` | `ReviewVote` / `void` | Helpful votes. |
+| `vote(Review, Model $voter, bool $helpful)` / `removeVote(Review, Model $voter)` | `ReviewVote` / `bool` | Helpful votes (`removeVote()` is `false` when there was no vote). |
 | `verify(Review)` / `unverify(Review)` | `Review` | Sets / clears the verified flag; fires `ReviewVerified`. |
 | `fake()` | `ReviewsFake` | Swaps in the recording fake (see [Testing](#testing-your-app)). |
 
@@ -552,7 +552,7 @@ use RoundlyConsulting\Reviews\Facades\Reviews;
 
 Reviews::vote($review, $user, true);    // helpful
 Reviews::vote($review, $user, false);   // flips the same voter to unhelpful
-Reviews::removeVote($review, $user);    // withdraw
+Reviews::removeVote($review, $user);    // withdraw — bool, false when there was no vote
 
 $review->helpfulScore();                // helpful_count - unhelpful_count
 ```
@@ -567,7 +567,7 @@ class User extends Model { use CanVoteOnReviews; }
 $user->voteOn($review);                 // helpful by default
 $user->hasVotedOn($review);             // bool
 $user->votedHelpfulOn($review);         // bool
-$user->removeVoteFrom($review);
+$user->removeVoteFrom($review);         // bool, like removeVote()
 ```
 
 ### Owner responses
@@ -743,7 +743,9 @@ $fake->assertNothingApproved();
 | `assertReviewUnverified()` | `assertNothingUnverified()` | the review |
 
 Every `assert*()` takes an optional callback and passes when at least one recorded call
-returns `true`.
+returns `true`. Only calls that change something are recorded: approving an approved review,
+rejecting a rejected one, verifying a verified one (or unverifying an unverified one) and
+removing a vote that was never cast are no-ops — no write, no event — so they are not.
 
 Register the Pest expectation matchers in your `tests/Pest.php`:
 
