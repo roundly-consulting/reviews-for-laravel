@@ -44,9 +44,16 @@ final class ReviewsServiceProvider extends PackageServiceProvider
                 database_path('migrations/'.date('Y_m_d_His').'_add_review_aggregates_to_reviewable_table.php'),
                 'reviews-aggregate-migrations',
             )
+            // Host-owned copies in the App\Http\Resources\Reviews namespace — never the package's
+            // own classes, whose namespace would break PSR-4 under app/ and never load.
             ->publishesStubs(
-                __DIR__.'/Http/Resources',
-                app_path('Http/Resources/Reviews'),
+                __DIR__.'/../stubs/ReviewResource.php.stub',
+                app_path('Http/Resources/Reviews/ReviewResource.php'),
+                'reviews-resources',
+            )
+            ->publishesStubs(
+                __DIR__.'/../stubs/ReviewCollection.php.stub',
+                app_path('Http/Resources/Reviews/ReviewCollection.php'),
                 'reviews-resources',
             )
             ->contributesToAbout(fn (): array => $this->aboutPayload());

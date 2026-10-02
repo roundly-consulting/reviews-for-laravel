@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Resources\Reviews;
+
+use Illuminate\Http\Resources\Json\ResourceCollection;
+
+/**
+ * Your copy of the reviews collection, published by `vendor:publish --tag=reviews-resources`.
+ * It renders each review through your published ReviewResource.
+ */
+class ReviewCollection extends ResourceCollection
+{
+    public $collects = ReviewResource::class;
+}

@@ -2,21 +2,20 @@
 
 declare(strict_types=1);
 
-namespace RoundlyConsulting\Reviews\Http\Resources;
+namespace App\Http\Resources\Reviews;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use RoundlyConsulting\Reviews\Models\Review;
 
 /**
- * Public-facing JSON shape for a review. To customise the exposed fields, publish
- * the "reviews-resources" tag: it writes an editable copy into
- * App\Http\Resources\Reviews (stubs/ReviewResource.php.stub, kept in step
- * with this class by tests/Feature/Provider/PublishedResourcesTest.php).
+ * Your copy of the reviews JSON shape, published by `vendor:publish --tag=reviews-resources`.
+ * It starts out rendering exactly what the package's own ReviewResource renders; it is yours to
+ * edit. Use this class (not the package one) in your controllers.
  *
  * @mixin Review
  */
-final class ReviewResource extends JsonResource
+class ReviewResource extends JsonResource
 {
     /**
      * @return array<string, mixed>
@@ -45,7 +44,7 @@ final class ReviewResource extends JsonResource
                 'type' => $review->reviewable_type,
                 'id' => $review->reviewable_id,
             ],
-            'responses' => ReviewResource::collection($this->whenLoaded('responses')),
+            'responses' => static::collection($this->whenLoaded('responses')),
             'photos' => $this->photos($review),
             'created_at' => $review->created_at?->toIso8601String(),
             'updated_at' => $review->updated_at?->toIso8601String(),
@@ -59,7 +58,7 @@ final class ReviewResource extends JsonResource
      *
      * @return list<array{id: int|string|null, url: string, srcset: string}>
      */
-    private function photos(Review $review): array
+    protected function photos(Review $review): array
     {
         $photos = [];
 

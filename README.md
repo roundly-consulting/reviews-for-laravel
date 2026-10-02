@@ -93,7 +93,8 @@ Optionally publish the translations:
 php artisan vendor:publish --tag="reviews-translations"
 ```
 
-Optionally publish the JSON resources (to customise the exposed API shape):
+Optionally publish editable copies of the JSON resources into `App\Http\Resources\Reviews` (to
+customise the exposed API shape — see [JSON resource](#json-resource)):
 
 ```bash
 php artisan vendor:publish --tag="reviews-resources"
@@ -704,8 +705,22 @@ use RoundlyConsulting\Reviews\Http\Resources\ReviewResource;
 return ReviewResource::collection($product->approvedReviews()->with('responses')->get());
 ```
 
-Publish them with `--tag="reviews-resources"` (copied to `app/Http/Resources/Reviews`) to
-customise the fields.
+To customise the fields, publish your own copies:
+
+```bash
+php artisan vendor:publish --tag="reviews-resources"
+```
+
+This writes `App\Http\Resources\Reviews\ReviewResource` and `ReviewCollection` into
+`app/Http/Resources/Reviews` — app-namespaced classes you own, which start out rendering exactly
+what the package's resource does. Edit them, and use them in your controllers instead of the
+package classes:
+
+```php
+use App\Http\Resources\Reviews\ReviewResource;
+
+return ReviewResource::collection($product->approvedReviews()->with('responses')->get());
+```
 
 ### Custom verbs (macros)
 
