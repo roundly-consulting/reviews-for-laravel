@@ -69,6 +69,11 @@ php artisan vendor:publish --tag="reviews-migrations"
 php artisan migrate
 ```
 
+The polymorphic `reviewable`, `author` and `voter` columns follow `reviews.key_type`
+(`bigint` by default). If the models being reviewed, writing reviews or voting use UUID or ULID
+primary keys, set `REVIEWS_KEY_TYPE=uuid` (or `ulid`) **before** you migrate — the column type
+is fixed when the tables are created.
+
 Review photos are stored through `media-library-for-laravel`, whose migration is published the
 same way:
 
@@ -121,6 +126,10 @@ return [
     'model' => Review::class,
     'vote_model' => ReviewVote::class,
 
+    // Key type of the reviewable / author / voter morph columns: bigint, uuid or ulid.
+    // Read by the migrations — set it before you migrate.
+    'key_type' => env('REVIEWS_KEY_TYPE', 'bigint'),
+
     // The inclusive integer range an explicit rating must fall within.
     'min_rating' => (int) env('REVIEWS_MIN_RATING', 1),
     'max_rating' => (int) env('REVIEWS_MAX_RATING', 5),
@@ -172,6 +181,7 @@ return [
 |---|---|---|---|---|
 | `model` | `class-string` | `Review::class` | — | Model the package persists; extend it for custom behaviour. |
 | `vote_model` | `class-string` | `ReviewVote::class` | — | Model used for helpful votes; extend it for custom behaviour. |
+| `key_type` | `string` | `bigint` | `REVIEWS_KEY_TYPE` | Key type of the polymorphic `reviewable` / `author` / `voter` columns: `bigint`, `uuid` or `ulid` (anything else falls back to `bigint`). Read by the migrations, so set it before migrating. |
 | `min_rating` | `int` | `1` | `REVIEWS_MIN_RATING` | Lowest allowed rating value. |
 | `max_rating` | `int` | `5` | `REVIEWS_MAX_RATING` | Highest allowed rating value. |
 | `default_status` | `string` | `pending` | — | Status a review lands in when the moderator leaves it undecided (and auto-approve is off). |
