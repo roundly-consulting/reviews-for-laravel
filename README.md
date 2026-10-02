@@ -177,7 +177,7 @@ return [
 | `default_status` | `string` | `pending` | — | Status a review lands in when the moderator leaves it undecided (and auto-approve is off). |
 | `auto_approve` | `bool` | `false` | `REVIEWS_AUTO_APPROVE` | Approve new — and re-moderated, edited — reviews immediately, skipping the moderator. |
 | `reset_status_on_edit` | `bool` | `true` | `REVIEWS_RESET_STATUS_ON_EDIT` | On an edit to the rating/title/content, send an undecided review back to `default_status` (`false`: keep its status). The moderator re-runs either way. |
-| `one_per_author` | `bool` | `false` | `REVIEWS_ONE_PER_AUTHOR` | Block a second (non-deleted) review by the same author for the same subject; owner responses don't count. |
+| `one_per_author` | `bool` | `false` | `REVIEWS_ONE_PER_AUTHOR` | Block a second (non-deleted) review by the same author for the same subject; owner responses don't count. Checked under the author's row lock, so concurrent submissions can't both get in. |
 | `register_facade_alias` | `bool` | `true` | `REVIEWS_REGISTER_FACADE_ALIAS` | Register the global `Reviews` alias. |
 | `moderator` | `class-string` | `NullModerator::class` | — | `ReviewModerator` consulted on create and on edits to the rating/title/content; swap in `WordListModerator` or your own. |
 | `moderation.banned_words` | `list<string>` | `[]` | `REVIEWS_BANNED_WORDS` | Comma-separated words the `WordListModerator` rejects on. |
