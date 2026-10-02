@@ -651,8 +651,8 @@ and so are edits to a review's rating, title or content (see [Update & delete](#
 The moderator sees the whole review — `$review->author` and `$review->reviewable` are already
 set, and `$review->exists` tells a create from an edit. The default `NullModerator` leaves
 reviews at the default status. The bundled, dependency-free
-`WordListModerator` auto-rejects reviews containing any banned word (whole-word,
-case-insensitive):
+`WordListModerator` auto-rejects reviews whose title or content contains any banned word
+(whole-word, case-insensitive, in any script — `idiót` or `дурак` match like `scam` does):
 
 ```php
 // config/reviews.php

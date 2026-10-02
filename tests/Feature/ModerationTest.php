@@ -57,6 +57,37 @@ it('matches banned words whole-word and case-insensitively', function (): void {
         ->and($moderator->moderate($miss)->decision)->toBe(ModerationDecision::Pending);
 });
 
+it('matches non-ASCII banned words whole-word and case-insensitively', function (): void {
+    $moderator = new WordListModerator(['idiót', 'Дурак']);
+
+    $decide = fn (array $attributes): ModerationDecision => $moderator->moderate(new Review($attributes))->decision;
+
+    expect($decide(['content' => 'Ty idiót!']))->toBe(ModerationDecision::Reject)
+        ->and($decide(['title' => 'IDIÓT']))->toBe(ModerationDecision::Reject)
+        ->and($decide(['content' => 'ты ДУРАК']))->toBe(ModerationDecision::Reject)
+        ->and($decide(['content' => 'idióti']))->toBe(ModerationDecision::Pending);
+});
+
+it('does not split a word at its accented letters', function (): void {
+    // A byte-wise split cut "scamé" at the é and found "scam" in it.
+    $moderator = new WordListModerator(['scam']);
+
+    expect($moderator->moderate(new Review(['content' => 'Un scamé']))->decision)->toBe(ModerationDecision::Pending);
+});
+
+it('matches a banned word typed in decomposed form', function (): void {
+    $moderator = new WordListModerator(['idiót']);
+
+    // "o" + U+0301 COMBINING ACUTE ACCENT, the NFD spelling of "ó".
+    expect($moderator->moderate(new Review(['content' => "Ty idio\u{0301}t!"]))->decision)->toBe(ModerationDecision::Reject);
+})->skip(! class_exists(Normalizer::class), 'needs ext-intl to normalise');
+
+it('still screens text that carries invalid UTF-8', function (): void {
+    $moderator = new WordListModerator(['scam']);
+
+    expect($moderator->moderate(new Review(['content' => "a scam \xFF\xFE here"]))->decision)->toBe(ModerationDecision::Reject);
+});
+
 it('stays pending when the banned list is empty or content is blank', function (): void {
     $moderator = new WordListModerator([]);
     expect($moderator->moderate(new Review(['content' => 'anything']))->decision)

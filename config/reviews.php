@@ -126,7 +126,8 @@ return [
     | changes its rating, title or content. The default no-op moderator leaves
     | reviews at their default status. Swap in WordListModerator (or your own)
     | to auto-approve/auto-reject. Banned words feed the bundled
-    | WordListModerator and are matched case-insensitively as whole words.
+    | WordListModerator and are matched case-insensitively as whole words, in
+    | any script (accented and non-Latin words included).
     |
     */
 
