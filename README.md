@@ -542,7 +542,10 @@ update (firing `ReviewUpdated` instead).
 ### Helpful votes
 
 Any model can vote a review helpful or unhelpful. There is one vote per voter per review;
-re-voting flips it. The review's `helpful_count` / `unhelpful_count` are kept denormalized.
+re-voting flips it. The review's `helpful_count` / `unhelpful_count` are kept denormalized:
+each vote change and its recount run as one transaction under the review's row lock, so
+concurrent votes never leave a stale count. The recount writes those two columns only — it
+doesn't bump the review's `updated_at` or save other unsaved changes on the model you pass.
 
 ```php
 use RoundlyConsulting\Reviews\Facades\Reviews;
