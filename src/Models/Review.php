@@ -19,6 +19,7 @@ use RoundlyConsulting\Reviews\Concerns\HasReviewScopes;
 use RoundlyConsulting\Reviews\Database\Factories\ReviewFactory;
 use RoundlyConsulting\Reviews\Enums\ReviewStatus;
 use RoundlyConsulting\Reviews\ReviewsManager;
+use RoundlyConsulting\Reviews\Support\ReviewModel;
 use RoundlyConsulting\Reviews\Support\ReviewVoteModel;
 
 /**
@@ -78,16 +79,24 @@ class Review extends Model implements HasMedia
         return $this->morphTo();
     }
 
-    /** @return BelongsTo<Review, $this> */
+    /**
+     * The review this owner response answers — hydrated as the configured `reviews.model`.
+     *
+     * @return BelongsTo<Review, $this>
+     */
     public function parent(): BelongsTo
     {
-        return $this->belongsTo(self::class, 'parent_id');
+        return $this->belongsTo(ReviewModel::class(), 'parent_id');
     }
 
-    /** @return HasMany<Review, $this> */
+    /**
+     * The owner responses to this review — hydrated as the configured `reviews.model`.
+     *
+     * @return HasMany<Review, $this>
+     */
     public function responses(): HasMany
     {
-        return $this->hasMany(self::class, 'parent_id');
+        return $this->hasMany(ReviewModel::class(), 'parent_id');
     }
 
     /** @return HasMany<ReviewVote, $this> */

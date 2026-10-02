@@ -64,3 +64,16 @@ it('honours a host vote model through the voting flow', function (): void {
 // really default to the packaged models — is pinned once in tests/ArchTest.php by
 // `ArchPresets::swappableModelsAreNotFinal()`. It deliberately does NOT live here: that preset
 // asserts the config *defaults*, which this directory has swapped away.
+
+it('hydrates the response and parent relations as the host review model', function (): void {
+    $review = Product::create()->addReview(Member::create())->rating(5)->content('Great.')->create();
+    $response = $review->respond(Member::create(), 'Thanks!');
+
+    $responses = $review->fresh()?->responses;
+    $parent = TenantReview::query()->findOrFail($response->getKey())->parent;
+
+    expect($responses)->toHaveCount(1)
+        ->and($responses?->first())->toBeInstanceOf(TenantReview::class)
+        ->and($parent)->toBeInstanceOf(TenantReview::class)
+        ->and($parent?->is($review))->toBeTrue();
+});
