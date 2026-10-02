@@ -119,7 +119,9 @@ final readonly class CreateReview
             return;
         }
 
+        // Reviews only: an owner response the author wrote on this subject is not a review of it.
         $exists = $this->newReview()->newQuery()
+            ->topLevel()
             ->authoredBy($data->author)
             ->for($data->reviewable)
             ->exists();

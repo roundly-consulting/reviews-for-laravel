@@ -25,13 +25,15 @@ trait CanReview
         return $this->morphMany(ReviewModel::class(), 'author');
     }
 
+    /** Whether this model wrote a review of the subject — an owner response on it does not count. */
     public function hasReviewed(Model $reviewable): bool
     {
-        return $this->reviewsAuthored()->for($reviewable)->exists();
+        return $this->reviewsAuthored()->topLevel()->for($reviewable)->exists();
     }
 
+    /** This model's review of the subject (never one of its owner responses), or null. */
     public function reviewFor(Model $reviewable): ?Review
     {
-        return $this->reviewsAuthored()->for($reviewable)->first();
+        return $this->reviewsAuthored()->topLevel()->for($reviewable)->first();
     }
 }

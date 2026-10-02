@@ -9,6 +9,7 @@ use RoundlyConsulting\Reviews\Enums\ReviewStatus;
 use RoundlyConsulting\Reviews\Events\ReviewCreated;
 use RoundlyConsulting\Reviews\Exceptions\InvalidRatingException;
 use RoundlyConsulting\Reviews\Exceptions\InvalidReviewException;
+use RoundlyConsulting\Reviews\Facades\Reviews;
 use RoundlyConsulting\Reviews\Tests\Entity;
 
 beforeEach(function (): void {
@@ -135,6 +136,21 @@ it('blocks a duplicate when one_per_author is enabled', function (): void {
         content: 'Second',
     ));
 })->throws(InvalidReviewException::class, 'This author has already reviewed this subject.');
+
+it('lets an author who only responded on a subject review it under one_per_author', function (): void {
+    config()->set('reviews.one_per_author', true);
+
+    $seller = Entity::create();
+    $product = Entity::create();
+    $customerReview = $this->action->execute(new CreateReviewData(author: Entity::create(), reviewable: $product, content: 'Great'));
+
+    Reviews::respond($customerReview, $seller, 'Thanks!');
+
+    $own = $this->action->execute(new CreateReviewData(author: $seller, reviewable: $product, content: 'My own take'));
+
+    expect($own->exists)->toBeTrue()
+        ->and($own->isResponse())->toBeFalse();
+});
 
 it('allows multiple reviews when one_per_author is disabled', function (): void {
     $author = Entity::create();
