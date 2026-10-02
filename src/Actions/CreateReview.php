@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Reviews\Actions;
 
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
-use RoundlyConsulting\Reviews\Contracts\ReviewModerator;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 use RoundlyConsulting\Reviews\DataTransferObjects\CreateReviewData;
-use RoundlyConsulting\Reviews\Enums\ReviewStatus;
+use RoundlyConsulting\Reviews\Events\ReviewApproved;
 use RoundlyConsulting\Reviews\Events\ReviewCreated;
+use RoundlyConsulting\Reviews\Events\ReviewRejected;
 use RoundlyConsulting\Reviews\Exceptions\InvalidReviewException;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Support\PendingPhoto;
@@ -19,6 +19,7 @@ final readonly class CreateReview
 {
     public function __construct(
         private ValidatesRating $validateRating,
+        private ModerateReview $moderate,
     ) {}
 
     public function execute(CreateReviewData $data): Review
@@ -38,17 +39,14 @@ final readonly class CreateReview
         $review->meta = $data->meta;
         $review->verified = $data->verified;
 
-        $forceApproved = $data->approved || (bool) config('reviews.auto_approve', false);
-
-        if ($forceApproved) {
-            $review->status = ReviewStatus::Approved;
-            $review->approved_at = CarbonImmutable::now();
-        } else {
-            $this->applyModeration($review);
-        }
-
+        // Associated before moderation, so a moderator can judge the author and the subject.
         $review->author()->associate($data->author);
         $review->reviewable()->associate($data->reviewable);
+
+        $outcome = $this->moderate->execute(
+            $review,
+            approve: $data->approved || Config::boolean('reviews.auto_approve'),
+        );
 
         // Persist the review and bind its photos atomically: an over-limit request or any failed
         // upload rolls the whole create back, so no review is left without its expected gallery.
@@ -58,8 +56,16 @@ final readonly class CreateReview
             $this->attachPhotos($review, $data->photos);
         });
 
-        // Dispatch after commit so listeners and broadcasts see the persisted photos.
+        // Dispatch after commit so listeners and broadcasts see the persisted photos. A review
+        // that lands approved or rejected announces it like a later approve()/reject() would, so
+        // its photos are warmed and "review went live" listeners run however it got there.
         ReviewCreated::dispatch($review);
+
+        if ($review->isApproved()) {
+            ReviewApproved::dispatch($review);
+        } elseif ($review->isRejected()) {
+            ReviewRejected::dispatch($review, $outcome->reason);
+        }
 
         return $review;
     }
@@ -107,32 +113,6 @@ final readonly class CreateReview
         }
     }
 
-    private function applyModeration(Review $review): void
-    {
-        $outcome = app(ReviewModerator::class)->moderate($review);
-
-        if ($outcome->decision->isApprove()) {
-            $review->status = ReviewStatus::Approved;
-            $review->approved_at = CarbonImmutable::now();
-
-            return;
-        }
-
-        if ($outcome->decision->isReject()) {
-            $review->status = ReviewStatus::Rejected;
-
-            if ($outcome->reason !== null) {
-                $meta = $review->meta ?? collect();
-                $meta->put('rejection_reason', $outcome->reason);
-                $review->meta = $meta;
-            }
-
-            return;
-        }
-
-        $review->status = $this->defaultStatus();
-    }
-
     private function guardAgainstDuplicate(CreateReviewData $data): void
     {
         if (! (bool) config('reviews.one_per_author', false)) {
@@ -147,13 +127,6 @@ final readonly class CreateReview
         if ($exists) {
             throw InvalidReviewException::duplicate();
         }
-    }
-
-    private function defaultStatus(): ReviewStatus
-    {
-        $value = (string) config('reviews.default_status', ReviewStatus::Pending->value);
-
-        return ReviewStatus::tryFrom($value) ?? ReviewStatus::Pending;
     }
 
     private function newReview(): Review
