@@ -82,12 +82,19 @@ it('resolves the packaged models by default', function (): void {
         ->and(ReviewVoteModel::class())->toBe(ReviewVote::class);
 });
 
-it('falls back to the packaged model when the configured class is not a review', function (): void {
+it('refuses a foreign model instead of falling back to the packaged one', function (): void {
+    // The toolkit refuses any class that is not the packaged model or a subclass of it.
     config()->set('reviews.model', Product::class);
     config()->set('reviews.vote_model', Product::class);
 
-    expect(ReviewModel::class())->toBe(Review::class)
-        ->and(ReviewVoteModel::class())->toBe(ReviewVote::class);
+    expect(fn (): string => ReviewModel::class())->toThrow(
+        InvalidConfigurationException::class,
+        'Configuration value [reviews.model] must be a class-string of ['.Review::class.'], ['.Product::class.'] given.',
+    );
+    expect(fn (): string => ReviewVoteModel::class())->toThrow(
+        InvalidConfigurationException::class,
+        'Configuration value [reviews.vote_model] must be a class-string of ['.ReviewVote::class.'], ['.Product::class.'] given.',
+    );
 });
 
 it('throws when the configured model is not a model at all', function (): void {

@@ -21,18 +21,15 @@ final class ReviewModel
     /**
      * The configured review model.
      *
-     * A configured class that is a real Eloquent model but not a {@see Review} cannot serve the
-     * package (every action, event, scope and observer is typed against `Review`), so it falls back
-     * to the packaged model — the tolerance the hand-written `@var` overrides always had. A value
-     * that is not a model class at all throws.
+     * Absent config resolves the packaged model; anything else must be that model or a subclass
+     * of it, or the toolkit's ModelResolver throws InvalidConfigurationException naming the key
+     * — a foreign class is never silently replaced.
      *
      * @return class-string<Review>
      */
     public static function class(): string
     {
-        $class = ModelResolver::for('reviews.model', Review::class);
-
-        return is_a($class, Review::class, true) ? $class : Review::class;
+        return ModelResolver::for('reviews.model', Review::class);
     }
 
     public static function new(): Review
