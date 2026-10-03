@@ -277,3 +277,14 @@ it('flags a default status typo in about (strict config)', function (): void {
 
     expect(Artisan::output())->toMatch('/Default status\W+INVALID/');
 });
+
+it('rates factory reviews inside the configured scale and refuses a junk one (strict config)', function (): void {
+    config()->set('reviews.min_rating', '3');
+    config()->set('reviews.max_rating', '3');
+
+    expect(Review::factory()->make()->rating)->toBe(3);
+
+    config()->set('reviews.max_rating', 'five');
+
+    expect(fn () => Review::factory()->make())->toThrow(InvalidConfigurationException::class, 'reviews.max_rating');
+});

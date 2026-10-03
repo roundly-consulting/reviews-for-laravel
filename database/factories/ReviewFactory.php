@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Date;
 use RoundlyConsulting\Reviews\Enums\ReviewStatus;
 use RoundlyConsulting\Reviews\Models\Review;
+use RoundlyConsulting\Reviews\Support\ReviewsConfig;
 
 /** @extends Factory<Review> */
 final class ReviewFactory extends Factory
@@ -21,7 +22,7 @@ final class ReviewFactory extends Factory
         return [
             'title' => fake()->words(asText: true),
             'content' => fake()->sentence(),
-            'rating' => fake()->numberBetween(1, (int) config('reviews.max_rating', 5)),
+            'rating' => fake()->numberBetween(...ReviewsConfig::ratingRange()),
             'status' => ReviewStatus::Pending->value,
             'verified' => false,
         ];
