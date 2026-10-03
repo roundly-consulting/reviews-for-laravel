@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Artisan;
+use RoundlyConsulting\Reviews\Moderation\WordListModerator;
 
 /**
  * A — the secret-safe `about` capture.
@@ -56,11 +57,22 @@ it('reports the moderation blocklist and photo disk without leaking either', fun
     );
 });
 
-it('reports an unset photos disk as the default', function (): void {
-    config()->set('reviews.photos.disk', null);
+it('reports an unset photos disk as the default', function (?string $value): void {
+    config()->set('reviews.photos.disk', $value);
 
-    expect(aboutOutput())->toContain('DEFAULT');
-});
+    expect(aboutOutput())->toMatch('/Photo disk\W+DEFAULT/');
+})->with(['absent' => [null], 'blank' => [''], 'whitespace' => [' ']]);
+
+it('reports the moderator the container binds, the null one when not set', function (mixed $value, string $label): void {
+    config()->set('reviews.moderator', $value);
+
+    expect(aboutOutput())->toMatch("/Moderator\W+{$label}/");
+})->with([
+    'absent' => [null, 'NullModerator'],
+    'blank' => ['', 'NullModerator'],
+    'word list' => [WordListModerator::class, 'WordListModerator'],
+    'junk' => [['x'], 'INVALID'],
+]);
 
 it('reports no banned words as NONE', function (): void {
     config()->set('reviews.moderation.banned_words', []);

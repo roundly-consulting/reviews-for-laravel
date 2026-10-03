@@ -111,10 +111,11 @@ return [
     | Facade Alias
     |--------------------------------------------------------------------------
     |
-    | Registers a global "Reviews" alias for the package facade. Disable it if
-    | the alias collides with another class in your application; the fully
-    | qualified facade is always available regardless of this setting. Any other
-    | string is used as the alias name instead.
+    | Registers a global "Reviews" alias for the package facade. Disable it
+    | (false/0/off/no) if the alias collides with another class in your
+    | application; the fully qualified facade is always available regardless of
+    | this setting. Any other string is used as the alias name instead. A blank
+    | value is not set, so the alias is registered.
     |
     */
 
@@ -188,11 +189,11 @@ return [
     |   visibility           "public" (default) or "private".
     |   warm_on_approval     Queue variant generation when a review is approved.
     |
-    | Every value is read strictly: a default applies only when the key is
-    | unset. A non-integer count ("five"), a negative one, a visibility typo
-    | ("privat") or a blank bucket / disk name throws an
-    | InvalidConfigurationException rather than falling back — a junk max
-    | would otherwise read as 0 (unlimited), a junk visibility as public.
+    | Every value is read strictly: a value that is not set (null, or blank
+    | like a host's KEY=) takes the default. A non-integer count ("five"), a
+    | negative one, a visibility typo ("privat") or a non-string bucket / disk
+    | name throws an InvalidConfigurationException rather than falling back — a
+    | junk max would otherwise read as 0 (unlimited), a junk visibility as public.
     |
     */
 

@@ -117,7 +117,7 @@ final class ReviewsServiceProvider extends PackageServiceProvider
             'Auto approve' => $this->switch(Config::boolean('reviews.auto_approve')),
             'Reset status on edit' => $this->switch(Config::boolean('reviews.reset_status_on_edit', true)),
             'One review per author' => $this->switch(Config::boolean('reviews.one_per_author')),
-            'Moderator' => class_basename((string) config('reviews.moderator', NullModerator::class)),
+            'Moderator' => $this->moderatorLabel(),
             'Banned words' => $this->orInvalid(static function (): string {
                 $count = count(ReviewsConfig::bannedWords());
 
@@ -146,8 +146,24 @@ final class ReviewsServiceProvider extends PackageServiceProvider
     }
 
     /**
-     * Mirrors the toolkit's alias resolution: `null` or a false spelling disables it, a
-     * string that is not a boolean word is the alias name, and a junk value throws.
+     * The bound moderator's short name. Mirrors `bindFromConfig()`: a value that is not set —
+     * absent, null or blank — is the `NullModerator`; a non-string can never bind.
+     */
+    private function moderatorLabel(): string
+    {
+        $configured = config('reviews.moderator');
+
+        if ($configured === null || (is_string($configured) && trim($configured) === '')) {
+            return class_basename(NullModerator::class);
+        }
+
+        return is_string($configured) ? class_basename($configured) : 'INVALID';
+    }
+
+    /**
+     * Mirrors the toolkit's alias resolution: an explicit `null` or a false spelling
+     * (`false`/`0`/`off`/`no`) disables it, a blank value is not set (the `Reviews` default),
+     * a string that is not a boolean word is the alias name, and a junk value throws.
      */
     private function aliasLabel(): string
     {

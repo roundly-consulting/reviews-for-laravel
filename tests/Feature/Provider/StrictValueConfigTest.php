@@ -12,14 +12,17 @@ use RoundlyConsulting\Reviews\Exceptions\InvalidRatingException;
 use RoundlyConsulting\Reviews\Facades\Reviews;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Moderation\WordListModerator;
+use RoundlyConsulting\Reviews\Support\ReviewsConfig;
 use RoundlyConsulting\Reviews\Tests\Entity;
 
 /**
  * Sweep 2 — the non-boolean settings. `(int) env()` turned `REVIEWS_PHOTOS_MAX=five` into 0,
  * which the package reads as UNLIMITED photos; a `photos.visibility` typo (`privat`) made every
  * photo PUBLIC; a junk bucket, disk, width or mime list quietly fell back. Each value now goes
- * through a strict reader: the default applies only when the key is absent, anything present
- * but unusable throws.
+ * through a strict reader: anything set but unusable throws.
+ *
+ * Sweep 3 — a blank value (a host's `KEY=`, or whitespace) is not set: it takes the default,
+ * exactly like an absent key. Junk still throws.
  */
 const REVIEWS_VALUE_ENV = [
     'REVIEWS_MIN_RATING' => 'min_rating',
@@ -123,15 +126,15 @@ it('refuses a junk or negative photo limit instead of reading it as unlimited (s
         ->toThrow(InvalidConfigurationException::class, $message);
 })->with([
     'junk' => ['five', 'Configuration value [reviews.photos.max] must be an integer, [five] given.'],
-    'blank' => ['', "Configuration value [reviews.photos.max] must be an integer, [''] given."],
+    'decimal' => ['2.5', 'Configuration value [reviews.photos.max] must be an integer, [2.5] given.'],
     'negative' => ['-1', 'Configuration value [reviews.photos.max] must be at least 0, [-1] given.'],
 ]);
 
-it('caps photos at the default five when the limit is absent (strict config)', function (): void {
-    config()->set('reviews.photos.max', null);
+it('caps photos at the default five when the limit is absent or blank (strict config)', function (?string $value): void {
+    config()->set('reviews.photos.max', $value);
 
     expect(fn () => strictReviewWithPhotos(strictPhotos(6)))->toThrow('at most 5');
-});
+})->with(['absent' => [null], 'blank' => [''], 'whitespace' => [' ']]);
 
 it('reads a canonical integer string photo limit (strict config)', function (): void {
     config()->set('reviews.photos.max', '2');
@@ -147,15 +150,14 @@ it('refuses a visibility typo instead of making photos public (strict config)', 
 })->with([
     'typo' => ['privat'],
     'capitalised' => ['Private'],
-    'blank' => [''],
     'boolean' => [true],
 ]);
 
-it('keeps photos public when the visibility is absent (strict config)', function (): void {
-    config()->set('reviews.photos.visibility', null);
+it('keeps photos public when the visibility is absent or blank (strict config)', function (?string $value): void {
+    config()->set('reviews.photos.visibility', $value);
 
     expect(strictPhotoReview()->resolveMediaBucket('photos')?->getVisibility())->toBe('public');
-});
+})->with(['absent' => [null], 'blank' => [''], 'whitespace' => [' ']]);
 
 it('refuses a junk or negative max file size (strict config)', function (mixed $value, string $message): void {
     config()->set('reviews.photos.max_file_size', $value);
@@ -173,36 +175,44 @@ it('applies a max file size written as an env string (strict config)', function 
     expect(strictPhotoReview()->resolveMediaBucket('photos')?->getMaxFileSize())->toBe(1024);
 });
 
-it('applies the default max file size when it is absent (strict config)', function (): void {
-    config()->set('reviews.photos.max_file_size', null);
+it('applies the default max file size when it is absent or blank (strict config)', function (?string $value): void {
+    config()->set('reviews.photos.max_file_size', $value);
 
     expect(strictPhotoReview()->resolveMediaBucket('photos')?->getMaxFileSize())->toBe(5 * 1024 * 1024);
-});
+})->with(['absent' => [null], 'blank' => [''], 'whitespace' => [' ']]);
 
-it('refuses a blank or non-string photo storage setting (strict config)', function (string $key, mixed $value): void {
+it('refuses a non-string photo storage setting (strict config)', function (string $key, mixed $value): void {
     config()->set('reviews.photos.visibility', 'private');
     config()->set($key, $value);
 
     expect(fn () => strictPhotoReview()->resolveMediaBucket('photos'))
         ->toThrow(InvalidConfigurationException::class, "Configuration value [{$key}] must be a non-empty string");
 })->with([
-    'bucket blank' => ['reviews.photos.bucket', ''],
     'bucket array' => ['reviews.photos.bucket', ['photos']],
-    'disk blank' => ['reviews.photos.disk', ' '],
     'disk int' => ['reviews.photos.disk', 3],
-    'private disk blank' => ['reviews.photos.private_disk', ''],
     'private disk bool' => ['reviews.photos.private_disk', false],
 ]);
 
-it('uses the packaged bucket and private disk when they are absent (strict config)', function (): void {
+it('uses the packaged bucket and private disk when they are absent or blank (strict config)', function (?string $value): void {
     config()->set('reviews.photos.visibility', 'private');
-    config()->set('reviews.photos.bucket', null);
-    config()->set('reviews.photos.private_disk', null);
+    config()->set('reviews.photos.bucket', $value);
+    config()->set('reviews.photos.disk', $value);
+    config()->set('reviews.photos.private_disk', $value);
 
     $review = strictPhotoReview();
 
     expect($review->photosBucket())->toBe('photos')
         ->and($review->resolveMediaBucket('photos')?->getDisk())->toBe('local');
+})->with(['absent' => [null], 'blank' => [''], 'whitespace' => [' ']]);
+
+it('reads a blank mime list, width ladder or blocklist as not set (strict config)', function (): void {
+    config()->set('reviews.photos.accepted_mime_types', '');
+    config()->set('reviews.photos.responsive_widths', ' ');
+    config()->set('reviews.moderation.banned_words', '');
+
+    expect(ReviewsConfig::acceptedMimeTypes())->toBe(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+        ->and(ReviewsConfig::responsiveWidths())->toBeNull()
+        ->and(ReviewsConfig::bannedWords())->toBe([]);
 });
 
 it('refuses a junk accepted mime type list (strict config)', function (mixed $value): void {

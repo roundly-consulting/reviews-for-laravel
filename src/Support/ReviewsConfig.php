@@ -10,8 +10,9 @@ use RoundlyConsulting\PackageToolkit\Support\Config;
 /**
  * Strict readers for the package's non-boolean settings.
  *
- * Every value falls back to its default only when the key is absent (null). Anything present
- * but unusable — `five` for a count, `privat` for a visibility, a blank disk — throws
+ * A value that is not set — absent, null, or blank like a host's `KEY=` — falls back to its
+ * default (or, for an optional setting such as the photos disk, none). Anything else unusable —
+ * `five` for a count, `privat` for a visibility, an array for a disk — throws
  * {@see InvalidConfigurationException} naming the key, so a typo never quietly picks a side
  * (e.g. 0 = unlimited photos, or public photos).
  *
@@ -69,7 +70,7 @@ final class ReviewsConfig
     /** The explicit photos disk, or null to choose one by visibility. */
     public static function photoDisk(): ?string
     {
-        return config('reviews.photos.disk') === null ? null : self::string('reviews.photos.disk', '');
+        return self::unlessBlank(config('reviews.photos.disk')) === null ? null : self::string('reviews.photos.disk', '');
     }
 
     public static function privatePhotoDisk(): string
@@ -84,7 +85,7 @@ final class ReviewsConfig
      */
     public static function acceptedMimeTypes(): array
     {
-        $types = config('reviews.photos.accepted_mime_types')
+        $types = self::unlessBlank(config('reviews.photos.accepted_mime_types'))
             ?? ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
         return self::stringList('reviews.photos.accepted_mime_types', $types);
@@ -98,7 +99,7 @@ final class ReviewsConfig
     public static function responsiveWidths(): ?array
     {
         $key = 'reviews.photos.responsive_widths';
-        $widths = config($key);
+        $widths = self::unlessBlank(config($key));
 
         if ($widths === null) {
             return null;
@@ -125,7 +126,7 @@ final class ReviewsConfig
      */
     public static function bannedWords(): array
     {
-        return self::stringList('reviews.moderation.banned_words', config('reviews.moderation.banned_words') ?? []);
+        return self::stringList('reviews.moderation.banned_words', self::unlessBlank(config('reviews.moderation.banned_words')) ?? []);
     }
 
     /** Lifetime, in minutes, of a private photo's signed URL (media-library's setting). */
@@ -136,17 +137,26 @@ final class ReviewsConfig
 
     private static function string(string $key, string $default): string
     {
-        $value = config($key);
+        $value = self::unlessBlank(config($key));
 
         if ($value === null) {
             return $default;
         }
 
-        if (! is_string($value) || trim($value) === '') {
+        if (! is_string($value)) {
             throw InvalidConfigurationException::notAString($key, $value);
         }
 
         return $value;
+    }
+
+    /**
+     * A raw config value, with a blank string (`''` or whitespace — a host's `KEY=`) read as
+     * null: not set, exactly like an absent key.
+     */
+    private static function unlessBlank(mixed $value): mixed
+    {
+        return is_string($value) && trim($value) === '' ? null : $value;
     }
 
     /**
