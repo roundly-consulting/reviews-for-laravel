@@ -49,12 +49,15 @@ return [
     | The inclusive integer range an explicit rating must fall within. Ratings
     | are optional (a review may be text only), but when supplied they are
     | validated against this range. Defaults to a classic 1–5 star scale.
+    | min_rating must be 0–255 (the column is an unsigned tinyint) and
+    | max_rating between min_rating (at least 1) and 255. Integers only: a
+    | value such as "five" throws an InvalidConfigurationException.
     |
     */
 
-    'min_rating' => (int) env('REVIEWS_MIN_RATING', 1),
+    'min_rating' => env('REVIEWS_MIN_RATING', 1),
 
-    'max_rating' => (int) env('REVIEWS_MAX_RATING', 5),
+    'max_rating' => env('REVIEWS_MAX_RATING', 5),
 
     /*
     |--------------------------------------------------------------------------
@@ -178,12 +181,18 @@ return [
     |                        under /storage without its signed URL.
     |   max                  Per-review photo limit (0 = unlimited); overflow
     |                        throws InvalidReviewException::tooManyPhotos().
-    |   max_file_size        Largest accepted upload, in bytes.
-    |   accepted_mime_types  Whitelisted image mime types.
+    |   max_file_size        Largest accepted upload, in bytes (0 = no cap).
+    |   accepted_mime_types  Whitelisted image mime types ([] accepts any).
     |   responsive_widths    Width ladder for responsive variants (null uses the
     |                        media-library default ladder).
     |   visibility           "public" (default) or "private".
     |   warm_on_approval     Queue variant generation when a review is approved.
+    |
+    | Every value is read strictly: a default applies only when the key is
+    | unset. A non-integer count ("five"), a negative one, a visibility typo
+    | ("privat") or a blank bucket / disk name throws an
+    | InvalidConfigurationException rather than falling back — a junk max
+    | would otherwise read as 0 (unlimited), a junk visibility as public.
     |
     */
 
@@ -197,9 +206,9 @@ return [
 
         'private_disk' => env('REVIEWS_PHOTOS_PRIVATE_DISK', 'local'),
 
-        'max' => (int) env('REVIEWS_PHOTOS_MAX', 5),
+        'max' => env('REVIEWS_PHOTOS_MAX', 5),
 
-        'max_file_size' => (int) env('REVIEWS_PHOTOS_MAX_FILE_SIZE', 5 * 1024 * 1024),
+        'max_file_size' => env('REVIEWS_PHOTOS_MAX_FILE_SIZE', 5 * 1024 * 1024),
 
         'accepted_mime_types' => [
             'image/jpeg',

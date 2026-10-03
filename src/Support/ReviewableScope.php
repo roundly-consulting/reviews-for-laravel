@@ -120,11 +120,8 @@ final readonly class ReviewableScope
 
         $review = ReviewModel::new();
 
-        $bucket = config('reviews.photos.bucket', 'photos');
-        $bucket = is_string($bucket) && $bucket !== '' ? $bucket : 'photos';
-
         return MediaModel::query()
-            ->where('bucket_name', $bucket)
+            ->where('bucket_name', ReviewsConfig::photoBucket())
             ->where('model_type', $review->getMorphClass())
             ->whereIn('model_id', $this->approved()->pluck($review->getKeyName()));
     }

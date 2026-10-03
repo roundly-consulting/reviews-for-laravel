@@ -9,6 +9,7 @@ use Normalizer;
 use RoundlyConsulting\Reviews\Contracts\ReviewModerator;
 use RoundlyConsulting\Reviews\DataTransferObjects\ModerationOutcome;
 use RoundlyConsulting\Reviews\Models\Review;
+use RoundlyConsulting\Reviews\Support\ReviewsConfig;
 
 /**
  * A native, dependency-free moderator that rejects a review when its title or
@@ -32,9 +33,7 @@ final class WordListModerator implements ReviewModerator
     public function __construct(?array $bannedWords = null)
     {
         if ($bannedWords === null) {
-            /** @var list<string> $configured */
-            $configured = config('reviews.moderation.banned_words', []);
-            $bannedWords = $configured;
+            $bannedWords = ReviewsConfig::bannedWords();
         }
 
         $this->bannedWords = array_values(array_map(

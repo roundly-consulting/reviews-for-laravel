@@ -14,6 +14,7 @@ use RoundlyConsulting\MediaLibrary\Models\Media;
 use RoundlyConsulting\MediaLibrary\Variants\ResponsiveImageGenerator;
 use RoundlyConsulting\MediaLibrary\Variants\VariantResolver;
 use RoundlyConsulting\PackageToolkit\Support\Config;
+use RoundlyConsulting\Reviews\Support\ReviewsConfig;
 
 /**
  * First-class review photos for the bundled Review model, built on
@@ -43,35 +44,33 @@ trait HasReviewPhotos
         $bucket = $this->addMediaBucket($this->photosBucket())
             ->withVisibility($this->photosVisibility());
 
-        $accepted = config('reviews.photos.accepted_mime_types');
+        $accepted = ReviewsConfig::acceptedMimeTypes();
 
-        if (is_array($accepted) && $accepted !== []) {
-            $bucket->acceptsMimeTypes($this->stringList($accepted));
+        if ($accepted !== []) {
+            $bucket->acceptsMimeTypes($accepted);
         }
 
-        $maxFileSize = config('reviews.photos.max_file_size');
+        $maxFileSize = ReviewsConfig::photoMaxFileSize();
 
-        if (is_int($maxFileSize) && $maxFileSize > 0) {
+        if ($maxFileSize > 0) {
             $bucket->maxFileSize($maxFileSize);
         }
 
-        $disk = config('reviews.photos.disk');
+        $disk = ReviewsConfig::photoDisk();
 
-        if (is_string($disk) && $disk !== '') {
+        if ($disk !== null) {
             $bucket->useDisk($disk);
-        } elseif ($this->photosVisibility() === 'private') {
+        } elseif ($this->photosVisibility() === ReviewsConfig::VISIBILITY_PRIVATE) {
             // A private photo must not land on media-library's default disk: that is the
             // web-served `public` disk, where the file is reachable under /storage without the
             // signed URL. Its variants follow it, whatever `media.variants_disk` says.
-            $privateDisk = $this->privatePhotosDisk();
+            $privateDisk = ReviewsConfig::privatePhotoDisk();
 
             $bucket->useDisk($privateDisk)->storingVariantsOnDisk($privateDisk);
         }
 
-        $widths = config('reviews.photos.responsive_widths');
-
         // null lets media-library apply its configured default ladder; an explicit list overrides.
-        $bucket->responsiveWidths(is_array($widths) ? $this->normalizeWidths($widths) : null);
+        $bucket->responsiveWidths(ReviewsConfig::responsiveWidths());
     }
 
     /**
@@ -204,9 +203,7 @@ trait HasReviewPhotos
 
     public function photosBucket(): string
     {
-        $bucket = config('reviews.photos.bucket', 'photos');
-
-        return is_string($bucket) && $bucket !== '' ? $bucket : 'photos';
+        return ReviewsConfig::photoBucket();
     }
 
     /**
@@ -238,11 +235,12 @@ trait HasReviewPhotos
         return $variant;
     }
 
+    /**
+     * `public` or `private`; any other value throws rather than quietly publishing the photos.
+     */
     private function photosVisibility(): string
     {
-        $visibility = config('reviews.photos.visibility', 'public');
-
-        return $visibility === 'private' ? 'private' : 'public';
+        return ReviewsConfig::photoVisibility();
     }
 
     /**
@@ -287,56 +285,13 @@ trait HasReviewPhotos
         return '<img'.$rendered.'>';
     }
 
-    private function privatePhotosDisk(): string
-    {
-        $disk = config('reviews.photos.private_disk', 'local');
-
-        return is_string($disk) && $disk !== '' ? $disk : 'local';
-    }
-
     private function photoUrlExpiry(): DateTimeInterface
     {
-        $minutes = config('media.temporary_url_default_lifetime', 5);
-
-        return CarbonImmutable::now()->addMinutes(is_numeric($minutes) ? (int) $minutes : 5);
+        return CarbonImmutable::now()->addMinutes(ReviewsConfig::temporaryUrlLifetime());
     }
 
     public static function reviewPhotosEnabled(): bool
     {
         return Config::boolean('reviews.photos.enabled', true);
-    }
-
-    /**
-     * @param  array<int|string, mixed>  $values
-     * @return list<string>
-     */
-    private function stringList(array $values): array
-    {
-        $strings = [];
-
-        foreach ($values as $value) {
-            if (is_string($value) && $value !== '') {
-                $strings[] = $value;
-            }
-        }
-
-        return $strings;
-    }
-
-    /**
-     * @param  array<int|string, mixed>  $widths
-     * @return list<int>
-     */
-    private function normalizeWidths(array $widths): array
-    {
-        $clean = [];
-
-        foreach ($widths as $width) {
-            if (is_int($width) && $width > 0) {
-                $clean[] = $width;
-            }
-        }
-
-        return array_values(array_unique($clean));
     }
 }

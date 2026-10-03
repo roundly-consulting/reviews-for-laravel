@@ -132,8 +132,8 @@ return [
     'key_type' => env('REVIEWS_KEY_TYPE', 'bigint'),
 
     // The inclusive integer range an explicit rating must fall within.
-    'min_rating' => (int) env('REVIEWS_MIN_RATING', 1),
-    'max_rating' => (int) env('REVIEWS_MAX_RATING', 5),
+    'min_rating' => env('REVIEWS_MIN_RATING', 1),
+    'max_rating' => env('REVIEWS_MAX_RATING', 5),
 
     // Where the moderator's "undecided" leaves a review, and whether to approve immediately.
     'default_status' => ReviewStatus::Pending->value,
@@ -167,8 +167,8 @@ return [
         'bucket' => env('REVIEWS_PHOTOS_BUCKET', 'photos'),
         'disk' => env('REVIEWS_PHOTOS_DISK'),
         'private_disk' => env('REVIEWS_PHOTOS_PRIVATE_DISK', 'local'),
-        'max' => (int) env('REVIEWS_PHOTOS_MAX', 5),
-        'max_file_size' => (int) env('REVIEWS_PHOTOS_MAX_FILE_SIZE', 5 * 1024 * 1024),
+        'max' => env('REVIEWS_PHOTOS_MAX', 5),
+        'max_file_size' => env('REVIEWS_PHOTOS_MAX_FILE_SIZE', 5 * 1024 * 1024),
         'accepted_mime_types' => ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
         'responsive_widths' => [320, 640, 1024],
         'visibility' => env('REVIEWS_PHOTOS_VISIBILITY', 'public'),
@@ -183,30 +183,38 @@ return [
 | `model` | `class-string` | `Review::class` | — | Model the package persists; extend it for custom behaviour. |
 | `vote_model` | `class-string` | `ReviewVote::class` | — | Model used for helpful votes; extend it for custom behaviour. |
 | `key_type` | `string` | `bigint` | `REVIEWS_KEY_TYPE` | Key type of the polymorphic `reviewable` / `author` / `voter` columns: `bigint`, `uuid` or `ulid` (anything else throws `InvalidConfigurationException`). Read by the migrations, so set it before migrating. |
-| `min_rating` | `int` | `1` | `REVIEWS_MIN_RATING` | Lowest allowed rating value. |
-| `max_rating` | `int` | `5` | `REVIEWS_MAX_RATING` | Highest allowed rating value. |
-| `default_status` | `string` | `pending` | — | Status a review lands in when the moderator leaves it undecided (and auto-approve is off). |
+| `min_rating` | `int` | `1` | `REVIEWS_MIN_RATING` | Lowest allowed rating value, `0`–`255` (the rating column is an unsigned tinyint). |
+| `max_rating` | `int` | `5` | `REVIEWS_MAX_RATING` | Highest allowed rating value, from `min_rating` (at least `1`) to `255`. |
+| `default_status` | `string` | `pending` | — | Status a review lands in when the moderator leaves it undecided (and auto-approve is off). Any value that isn't a `ReviewStatus` throws. |
 | `auto_approve` | `bool` | `false` | `REVIEWS_AUTO_APPROVE` | Approve new — and re-moderated, edited — reviews immediately, skipping the moderator. |
 | `reset_status_on_edit` | `bool` | `true` | `REVIEWS_RESET_STATUS_ON_EDIT` | On an edit to the rating/title/content, send an undecided review back to `default_status` (`false`: keep its status). The moderator re-runs either way. |
 | `one_per_author` | `bool` | `false` | `REVIEWS_ONE_PER_AUTHOR` | Block a second (non-deleted) review by the same author for the same subject; owner responses don't count. Checked under the author's row lock, so concurrent submissions can't both get in. |
 | `register_facade_alias` | `bool\|string` | `true` | `REVIEWS_REGISTER_FACADE_ALIAS` | Register the global `Reviews` alias; any other string is used as the alias name. |
 | `moderator` | `class-string` | `NullModerator::class` | — | `ReviewModerator` consulted on create and on edits to the rating/title/content; swap in `WordListModerator` or your own. |
-| `moderation.banned_words` | `list<string>` | `[]` | `REVIEWS_BANNED_WORDS` | Comma-separated words the `WordListModerator` rejects on. |
+| `moderation.banned_words` | `list<string>` | `[]` | `REVIEWS_BANNED_WORDS` | Comma-separated words the `WordListModerator` rejects on. Set in PHP, it must be a list of non-empty strings. |
 | `cache_aggregates` | `bool` | `false` | `REVIEWS_CACHE_AGGREGATES` | Maintain cached `reviews_count` / `reviews_avg` on opted-in reviewables. |
 | `photos.enabled` | `bool` | `true` | `REVIEWS_PHOTOS_ENABLED` | Master switch for review photos; when `false`, `withPhoto()` throws and the bucket is never declared. |
-| `photos.bucket` | `string` | `photos` | `REVIEWS_PHOTOS_BUCKET` | The media bucket photos are stored in. |
-| `photos.disk` | `?string` | `null` | `REVIEWS_PHOTOS_DISK` | Storage disk for every photo. `null` = by visibility: private → `photos.private_disk`, public → media-library's default disk. |
-| `photos.private_disk` | `string` | `local` | `REVIEWS_PHOTOS_PRIVATE_DISK` | Non-public disk for private photos (and their variants) when `photos.disk` is `null`. |
-| `photos.max` | `int` | `5` | `REVIEWS_PHOTOS_MAX` | Per-review photo limit (`0` = unlimited); overflow throws `tooManyPhotos()`. |
-| `photos.max_file_size` | `int` | `5242880` | `REVIEWS_PHOTOS_MAX_FILE_SIZE` | Largest accepted upload, in bytes. |
-| `photos.accepted_mime_types` | `list<string>` | image types | — | Whitelisted photo mime types. |
-| `photos.responsive_widths` | `list<int>` | `[320, 640, 1024]` | — | Responsive variant width ladder (`null` uses the media default). |
-| `photos.visibility` | `string` | `public` | `REVIEWS_PHOTOS_VISIBILITY` | `public` or `private`. |
+| `photos.bucket` | `string` | `photos` | `REVIEWS_PHOTOS_BUCKET` | The media bucket photos are stored in (non-empty string). |
+| `photos.disk` | `?string` | `null` | `REVIEWS_PHOTOS_DISK` | Storage disk for every photo. `null` (unset) = by visibility: private → `photos.private_disk`, public → media-library's default disk. A blank value throws. |
+| `photos.private_disk` | `string` | `local` | `REVIEWS_PHOTOS_PRIVATE_DISK` | Non-public disk for private photos (and their variants) when `photos.disk` is `null` (non-empty string). |
+| `photos.max` | `int` | `5` | `REVIEWS_PHOTOS_MAX` | Per-review photo limit, at least `0` (`0` = unlimited, only when set explicitly); overflow throws `tooManyPhotos()`. |
+| `photos.max_file_size` | `int` | `5242880` | `REVIEWS_PHOTOS_MAX_FILE_SIZE` | Largest accepted upload, in bytes, at least `0` (`0` = no per-photo cap, only when set explicitly). |
+| `photos.accepted_mime_types` | `list<string>` | image types | — | Whitelisted photo mime types (`[]` accepts any type). |
+| `photos.responsive_widths` | `list<int>` | `[320, 640, 1024]` | — | Responsive variant width ladder of positive integers (`null` uses the media default). |
+| `photos.visibility` | `string` | `public` | `REVIEWS_PHOTOS_VISIBILITY` | `public` or `private` (exact, lowercase); anything else throws rather than publishing the photos. |
 | `photos.warm_on_approval` | `bool` | `true` | `REVIEWS_PHOTOS_WARM_ON_APPROVAL` | Queue variant generation when a review is approved. |
 
 Every `bool` switch is read strictly: `true`/`1`/`on`/`yes` turn it on, `false`/`0`/`off`/`no`
 turn it off, and anything else (say `REVIEWS_PHOTOS_ENABLED=disabled`) throws
 `InvalidConfigurationException` instead of quietly reading as the default.
+
+Every other setting is read just as strictly. A default applies only when the key is absent
+(unset or `null`). Integers accept an `int` or a plain integer string (`"10"`, as every env value
+is a string); `five`, `5.5`, `1e3` or a blank value throws rather than becoming `0` — which for
+`photos.max` would have meant unlimited photos. A `photos.visibility` typo such as `privat`
+throws rather than making the photos public, and a blank or non-string bucket or disk name, a
+non-list mime type or width setting, or a junk entry in one throws too. `php artisan about`
+renders a broken setting as `INVALID` instead of failing.
 
 The package works with zero configuration; every key above has a sensible default.
 

@@ -15,6 +15,7 @@ use RoundlyConsulting\Reviews\Exceptions\InvalidReviewException;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Support\PendingPhoto;
 use RoundlyConsulting\Reviews\Support\ReviewModel;
+use RoundlyConsulting\Reviews\Support\ReviewsConfig;
 
 final readonly class CreateReview
 {
@@ -147,7 +148,7 @@ final readonly class CreateReview
 
     private function guardPhotoLimit(Review $review, int $incoming): void
     {
-        $max = (int) config('reviews.photos.max', 5);
+        $max = ReviewsConfig::photoLimit();
 
         if ($max <= 0) {
             return;

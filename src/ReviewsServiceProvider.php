@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Reviews;
 
+use Closure;
 use Illuminate\Support\Facades\Event;
 use RoundlyConsulting\PackageToolkit\Concerns\RegistersBlueprintMacros;
+use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
 use RoundlyConsulting\PackageToolkit\Package;
 use RoundlyConsulting\PackageToolkit\PackageServiceProvider;
 use RoundlyConsulting\PackageToolkit\Support\Config;
 use RoundlyConsulting\Reviews\Commands\RecountReviewsCommand;
 use RoundlyConsulting\Reviews\Contracts\ReviewModerator;
+use RoundlyConsulting\Reviews\Enums\ReviewStatus;
 use RoundlyConsulting\Reviews\Events\ReviewApproved;
 use RoundlyConsulting\Reviews\Facades\Reviews as ReviewsFacade;
 use RoundlyConsulting\Reviews\Listeners\PurgeReviewPhotos;
@@ -19,6 +22,7 @@ use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Moderation\NullModerator;
 use RoundlyConsulting\Reviews\Observers\ReviewAggregateObserver;
 use RoundlyConsulting\Reviews\Support\ReviewModel;
+use RoundlyConsulting\Reviews\Support\ReviewsConfig;
 use RoundlyConsulting\Reviews\Support\ReviewVoteModel;
 
 final class ReviewsServiceProvider extends PackageServiceProvider
@@ -101,40 +105,38 @@ final class ReviewsServiceProvider extends PackageServiceProvider
      */
     private function aboutPayload(): array
     {
-        $bannedWords = config('reviews.moderation.banned_words', []);
-        $bannedWords = is_array($bannedWords) ? $bannedWords : [];
-
-        $disk = config('reviews.photos.disk');
         $photosEnabled = Config::boolean('reviews.photos.enabled', true);
 
         return [
             'Review model' => ReviewModel::class(),
             'Vote model' => ReviewVoteModel::class(),
-            'Rating scale' => sprintf(
-                '%d-%d',
-                (int) config('reviews.min_rating', 1),
-                (int) config('reviews.max_rating', 5),
+            'Rating scale' => $this->orInvalid(static fn (): string => implode('-', ReviewsConfig::ratingRange())),
+            'Default status' => $this->orInvalid(
+                static fn (): string => Config::enum('reviews.default_status', ReviewStatus::class, ReviewStatus::Pending)->value,
             ),
-            'Default status' => (string) config('reviews.default_status', 'pending'),
             'Auto approve' => $this->switch(Config::boolean('reviews.auto_approve')),
             'Reset status on edit' => $this->switch(Config::boolean('reviews.reset_status_on_edit', true)),
             'One review per author' => $this->switch(Config::boolean('reviews.one_per_author')),
             'Moderator' => class_basename((string) config('reviews.moderator', NullModerator::class)),
-            'Banned words' => $bannedWords === [] ? 'NONE' : sprintf('%d term(s)', count($bannedWords)),
+            'Banned words' => $this->orInvalid(static function (): string {
+                $count = count(ReviewsConfig::bannedWords());
+
+                return $count === 0 ? 'NONE' : sprintf('%d term(s)', $count);
+            }),
             'Cached aggregates' => $this->switch(Config::boolean('reviews.cache_aggregates')),
             'Facade alias' => $this->aliasLabel(),
             'Photos' => $this->switch($photosEnabled),
-            'Photo limits' => $photosEnabled ? $this->photoLimits() : 'N/A',
-            'Photo disk' => is_string($disk) && $disk !== '' ? 'SET' : 'DEFAULT',
-            'Photo visibility' => config('reviews.photos.visibility', 'public') === 'private' ? 'private' : 'public',
+            'Photo limits' => $photosEnabled ? $this->orInvalid($this->photoLimits(...)) : 'N/A',
+            'Photo disk' => $this->orInvalid(static fn (): string => ReviewsConfig::photoDisk() === null ? 'DEFAULT' : 'SET'),
+            'Photo visibility' => $this->orInvalid(ReviewsConfig::photoVisibility(...)),
             'Warm variants on approval' => $this->switch(Config::boolean('reviews.photos.warm_on_approval', true)),
         ];
     }
 
     private function photoLimits(): string
     {
-        $max = (int) config('reviews.photos.max', 5);
-        $size = (int) config('reviews.photos.max_file_size', 0);
+        $max = ReviewsConfig::photoLimit();
+        $size = ReviewsConfig::photoMaxFileSize();
 
         return sprintf(
             '%s, %s',
@@ -160,6 +162,21 @@ final class ReviewsServiceProvider extends PackageServiceProvider
         }
 
         return Config::boolean('reviews.register_facade_alias', true) ? 'Reviews' : 'DISABLED';
+    }
+
+    /**
+     * A strict read rendered for `about`, or `INVALID` when the setting is broken — so
+     * `php artisan about` still works on a misconfigured host while every real read throws.
+     *
+     * @param  Closure(): string  $read
+     */
+    private function orInvalid(Closure $read): string
+    {
+        try {
+            return $read();
+        } catch (InvalidConfigurationException) {
+            return 'INVALID';
+        }
     }
 
     private function switch(bool $enabled): string
