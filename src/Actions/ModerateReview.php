@@ -67,6 +67,6 @@ final readonly class ModerateReview
 
     private function defaultStatus(): ReviewStatus
     {
-        return Config::enumOr('reviews.default_status', ReviewStatus::class, ReviewStatus::Pending);
+        return Config::enum('reviews.default_status', ReviewStatus::class, ReviewStatus::Pending);
     }
 }

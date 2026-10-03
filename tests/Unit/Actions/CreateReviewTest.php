@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Event;
+use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
 use RoundlyConsulting\Reviews\Actions\CreateReview;
 use RoundlyConsulting\Reviews\DataTransferObjects\CreateReviewData;
 use RoundlyConsulting\Reviews\Enums\ReviewStatus;
@@ -106,16 +107,17 @@ it('honours a custom default status', function (): void {
     expect($review->status)->toBe(ReviewStatus::Approved);
 });
 
-it('falls back to pending for an unknown default status', function (): void {
+it('refuses an unknown default status instead of falling back to pending', function (): void {
     config()->set('reviews.default_status', 'bogus');
 
-    $review = $this->action->execute(new CreateReviewData(
+    expect(fn (): mixed => $this->action->execute(new CreateReviewData(
         author: Entity::create(),
         reviewable: Entity::create(),
         content: 'Defaulted',
-    ));
-
-    expect($review->status)->toBe(ReviewStatus::Pending);
+    )))->toThrow(
+        InvalidConfigurationException::class,
+        'Configuration value [reviews.default_status] must be one of [pending, approved, rejected], [bogus] given.',
+    );
 });
 
 it('blocks a duplicate when one_per_author is enabled', function (): void {
