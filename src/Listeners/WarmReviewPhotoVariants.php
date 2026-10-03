@@ -7,6 +7,7 @@ namespace RoundlyConsulting\Reviews\Listeners;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use RoundlyConsulting\MediaLibrary\Jobs\GenerateVariantsJob;
 use RoundlyConsulting\MediaLibrary\Models\Media;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 use RoundlyConsulting\Reviews\Events\ReviewApproved;
 
 /**
@@ -18,11 +19,11 @@ final class WarmReviewPhotoVariants implements ShouldQueue
 {
     public function handle(ReviewApproved $event): void
     {
-        if (! (bool) config('reviews.photos.enabled', true)) {
+        if (! Config::boolean('reviews.photos.enabled', true)) {
             return;
         }
 
-        if (! (bool) config('reviews.photos.warm_on_approval', true)) {
+        if (! Config::boolean('reviews.photos.warm_on_approval', true)) {
             return;
         }
 

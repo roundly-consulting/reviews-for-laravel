@@ -126,7 +126,7 @@ final readonly class CreateReview
             return;
         }
 
-        if (! (bool) config('reviews.photos.enabled', true)) {
+        if (! Config::boolean('reviews.photos.enabled', true)) {
             throw InvalidReviewException::photosDisabled();
         }
 

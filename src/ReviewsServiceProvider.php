@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Event;
 use RoundlyConsulting\PackageToolkit\Concerns\RegistersBlueprintMacros;
 use RoundlyConsulting\PackageToolkit\Package;
 use RoundlyConsulting\PackageToolkit\PackageServiceProvider;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 use RoundlyConsulting\Reviews\Commands\RecountReviewsCommand;
 use RoundlyConsulting\Reviews\Contracts\ReviewModerator;
 use RoundlyConsulting\Reviews\Events\ReviewApproved;
@@ -76,11 +77,11 @@ final class ReviewsServiceProvider extends PackageServiceProvider
         // exist before a host runs `php artisan migrate`.
         $this->registerBlueprintMacros();
 
-        if ((bool) config('reviews.cache_aggregates', false)) {
+        if (Config::boolean('reviews.cache_aggregates')) {
             ReviewModel::class()::observe(ReviewAggregateObserver::class);
         }
 
-        if ((bool) config('reviews.photos.enabled', true)) {
+        if (Config::boolean('reviews.photos.enabled', true)) {
             Event::listen(ReviewApproved::class, WarmReviewPhotoVariants::class);
 
             ReviewModel::class()::forceDeleted(static function (Review $review): void {
@@ -104,7 +105,7 @@ final class ReviewsServiceProvider extends PackageServiceProvider
         $bannedWords = is_array($bannedWords) ? $bannedWords : [];
 
         $disk = config('reviews.photos.disk');
-        $photosEnabled = (bool) config('reviews.photos.enabled', true);
+        $photosEnabled = Config::boolean('reviews.photos.enabled', true);
 
         return [
             'Review model' => ReviewModel::class(),
@@ -115,18 +116,18 @@ final class ReviewsServiceProvider extends PackageServiceProvider
                 (int) config('reviews.max_rating', 5),
             ),
             'Default status' => (string) config('reviews.default_status', 'pending'),
-            'Auto approve' => $this->switch((bool) config('reviews.auto_approve', false)),
-            'Reset status on edit' => $this->switch((bool) config('reviews.reset_status_on_edit', true)),
-            'One review per author' => $this->switch((bool) config('reviews.one_per_author', false)),
+            'Auto approve' => $this->switch(Config::boolean('reviews.auto_approve')),
+            'Reset status on edit' => $this->switch(Config::boolean('reviews.reset_status_on_edit', true)),
+            'One review per author' => $this->switch(Config::boolean('reviews.one_per_author')),
             'Moderator' => class_basename((string) config('reviews.moderator', NullModerator::class)),
             'Banned words' => $bannedWords === [] ? 'NONE' : sprintf('%d term(s)', count($bannedWords)),
-            'Cached aggregates' => $this->switch((bool) config('reviews.cache_aggregates', false)),
+            'Cached aggregates' => $this->switch(Config::boolean('reviews.cache_aggregates')),
             'Facade alias' => $this->aliasLabel(),
             'Photos' => $this->switch($photosEnabled),
             'Photo limits' => $photosEnabled ? $this->photoLimits() : 'N/A',
             'Photo disk' => is_string($disk) && $disk !== '' ? 'SET' : 'DEFAULT',
             'Photo visibility' => config('reviews.photos.visibility', 'public') === 'private' ? 'private' : 'public',
-            'Warm variants on approval' => $this->switch((bool) config('reviews.photos.warm_on_approval', true)),
+            'Warm variants on approval' => $this->switch(Config::boolean('reviews.photos.warm_on_approval', true)),
         ];
     }
 
@@ -142,15 +143,23 @@ final class ReviewsServiceProvider extends PackageServiceProvider
         );
     }
 
+    /**
+     * Mirrors the toolkit's alias resolution: `null` or a false spelling disables it, a
+     * string that is not a boolean word is the alias name, and a junk value throws.
+     */
     private function aliasLabel(): string
     {
         $configured = config('reviews.register_facade_alias', true);
 
-        if ($configured === false || $configured === null || $configured === '') {
+        if ($configured === null) {
             return 'DISABLED';
         }
 
-        return is_string($configured) ? $configured : 'Reviews';
+        if (is_string($configured) && filter_var($configured, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) === null) {
+            return $configured;
+        }
+
+        return Config::boolean('reviews.register_facade_alias', true) ? 'Reviews' : 'DISABLED';
     }
 
     private function switch(bool $enabled): string

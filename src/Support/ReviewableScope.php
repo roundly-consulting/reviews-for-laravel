@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use RoundlyConsulting\MediaLibrary\Models\Media;
 use RoundlyConsulting\MediaLibrary\Support\MediaModel;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 use RoundlyConsulting\Reviews\DataTransferObjects\RatingSummary;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\ReviewsManager;
@@ -113,7 +114,7 @@ final readonly class ReviewableScope
      */
     private function photos(): ?Builder
     {
-        if (! (bool) config('reviews.photos.enabled', true)) {
+        if (! Config::boolean('reviews.photos.enabled', true)) {
             return null;
         }
 

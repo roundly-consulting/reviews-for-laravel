@@ -32,8 +32,8 @@ return [
     | The key type used for the polymorphic reviewable / author / voter columns.
     | Use "uuid" or "ulid" when the models those columns point at use UUID/ULID
     | primary keys, otherwise leave it as "bigint". Your morph targets must share
-    | one key type; set this to match. Any unrecognized value falls back to
-    | "bigint".
+    | one key type; set this to match. Any other value throws an
+    | InvalidConfigurationException instead of quietly migrating as "bigint".
     |
     | Supported: "bigint", "uuid", "ulid"
     |
@@ -71,7 +71,7 @@ return [
 
     'default_status' => ReviewStatus::Pending->value,
 
-    'auto_approve' => (bool) env('REVIEWS_AUTO_APPROVE', false),
+    'auto_approve' => env('REVIEWS_AUTO_APPROVE', false),
 
     /*
     |--------------------------------------------------------------------------
@@ -88,7 +88,7 @@ return [
     |
     */
 
-    'reset_status_on_edit' => (bool) env('REVIEWS_RESET_STATUS_ON_EDIT', true),
+    'reset_status_on_edit' => env('REVIEWS_RESET_STATUS_ON_EDIT', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -101,7 +101,7 @@ return [
     |
     */
 
-    'one_per_author' => (bool) env('REVIEWS_ONE_PER_AUTHOR', false),
+    'one_per_author' => env('REVIEWS_ONE_PER_AUTHOR', false),
 
     /*
     |--------------------------------------------------------------------------
@@ -110,11 +110,12 @@ return [
     |
     | Registers a global "Reviews" alias for the package facade. Disable it if
     | the alias collides with another class in your application; the fully
-    | qualified facade is always available regardless of this setting.
+    | qualified facade is always available regardless of this setting. Any other
+    | string is used as the alias name instead.
     |
     */
 
-    'register_facade_alias' => (bool) env('REVIEWS_REGISTER_FACADE_ALIAS', true),
+    'register_facade_alias' => env('REVIEWS_REGISTER_FACADE_ALIAS', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -153,7 +154,7 @@ return [
     |
     */
 
-    'cache_aggregates' => (bool) env('REVIEWS_CACHE_AGGREGATES', false),
+    'cache_aggregates' => env('REVIEWS_CACHE_AGGREGATES', false),
 
     /*
     |--------------------------------------------------------------------------
@@ -188,7 +189,7 @@ return [
 
     'photos' => [
 
-        'enabled' => (bool) env('REVIEWS_PHOTOS_ENABLED', true),
+        'enabled' => env('REVIEWS_PHOTOS_ENABLED', true),
 
         'bucket' => env('REVIEWS_PHOTOS_BUCKET', 'photos'),
 
@@ -211,7 +212,7 @@ return [
 
         'visibility' => env('REVIEWS_PHOTOS_VISIBILITY', 'public'),
 
-        'warm_on_approval' => (bool) env('REVIEWS_PHOTOS_WARM_ON_APPROVAL', true),
+        'warm_on_approval' => env('REVIEWS_PHOTOS_WARM_ON_APPROVAL', true),
 
     ],
 

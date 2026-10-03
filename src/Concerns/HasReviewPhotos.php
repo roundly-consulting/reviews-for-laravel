@@ -13,6 +13,7 @@ use RoundlyConsulting\MediaLibrary\Contracts\HasMedia;
 use RoundlyConsulting\MediaLibrary\Models\Media;
 use RoundlyConsulting\MediaLibrary\Variants\ResponsiveImageGenerator;
 use RoundlyConsulting\MediaLibrary\Variants\VariantResolver;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 
 /**
  * First-class review photos for the bundled Review model, built on
@@ -302,7 +303,7 @@ trait HasReviewPhotos
 
     public static function reviewPhotosEnabled(): bool
     {
-        return (bool) config('reviews.photos.enabled', true);
+        return Config::boolean('reviews.photos.enabled', true);
     }
 
     /**

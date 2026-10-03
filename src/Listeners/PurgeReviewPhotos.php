@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Reviews\Listeners;
 
+use RoundlyConsulting\PackageToolkit\Support\Config;
 use RoundlyConsulting\Reviews\Models\Review;
 
 /**
@@ -16,7 +17,7 @@ final class PurgeReviewPhotos
 {
     public function handle(Review $review): void
     {
-        if (! (bool) config('reviews.photos.enabled', true)) {
+        if (! Config::boolean('reviews.photos.enabled', true)) {
             return;
         }
 

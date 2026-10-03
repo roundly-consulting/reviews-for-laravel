@@ -137,16 +137,16 @@ return [
 
     // Where the moderator's "undecided" leaves a review, and whether to approve immediately.
     'default_status' => ReviewStatus::Pending->value,
-    'auto_approve' => (bool) env('REVIEWS_AUTO_APPROVE', false),
+    'auto_approve' => env('REVIEWS_AUTO_APPROVE', false),
 
     // Re-moderate an edit to the rating, title or content; undecided → back to default_status.
-    'reset_status_on_edit' => (bool) env('REVIEWS_RESET_STATUS_ON_EDIT', true),
+    'reset_status_on_edit' => env('REVIEWS_RESET_STATUS_ON_EDIT', true),
 
     // Allow at most one (non-deleted) review per author per subject.
-    'one_per_author' => (bool) env('REVIEWS_ONE_PER_AUTHOR', false),
+    'one_per_author' => env('REVIEWS_ONE_PER_AUTHOR', false),
 
     // Register a global "Reviews" facade alias.
-    'register_facade_alias' => (bool) env('REVIEWS_REGISTER_FACADE_ALIAS', true),
+    'register_facade_alias' => env('REVIEWS_REGISTER_FACADE_ALIAS', true),
 
     // The ReviewModerator consulted when a review is created or its text/rating is edited.
     'moderator' => NullModerator::class,
@@ -158,12 +158,12 @@ return [
     ],
 
     // Keep reviews_count / reviews_avg in sync on reviewables that opt in.
-    'cache_aggregates' => (bool) env('REVIEWS_CACHE_AGGREGATES', false),
+    'cache_aggregates' => env('REVIEWS_CACHE_AGGREGATES', false),
 
     // Review photos (media-library-for-laravel). Set enabled = false to switch the
     // whole feature off — the bucket is then never declared and withPhoto() throws.
     'photos' => [
-        'enabled' => (bool) env('REVIEWS_PHOTOS_ENABLED', true),
+        'enabled' => env('REVIEWS_PHOTOS_ENABLED', true),
         'bucket' => env('REVIEWS_PHOTOS_BUCKET', 'photos'),
         'disk' => env('REVIEWS_PHOTOS_DISK'),
         'private_disk' => env('REVIEWS_PHOTOS_PRIVATE_DISK', 'local'),
@@ -172,7 +172,7 @@ return [
         'accepted_mime_types' => ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
         'responsive_widths' => [320, 640, 1024],
         'visibility' => env('REVIEWS_PHOTOS_VISIBILITY', 'public'),
-        'warm_on_approval' => (bool) env('REVIEWS_PHOTOS_WARM_ON_APPROVAL', true),
+        'warm_on_approval' => env('REVIEWS_PHOTOS_WARM_ON_APPROVAL', true),
     ],
 
 ];
@@ -182,14 +182,14 @@ return [
 |---|---|---|---|---|
 | `model` | `class-string` | `Review::class` | — | Model the package persists; extend it for custom behaviour. |
 | `vote_model` | `class-string` | `ReviewVote::class` | — | Model used for helpful votes; extend it for custom behaviour. |
-| `key_type` | `string` | `bigint` | `REVIEWS_KEY_TYPE` | Key type of the polymorphic `reviewable` / `author` / `voter` columns: `bigint`, `uuid` or `ulid` (anything else falls back to `bigint`). Read by the migrations, so set it before migrating. |
+| `key_type` | `string` | `bigint` | `REVIEWS_KEY_TYPE` | Key type of the polymorphic `reviewable` / `author` / `voter` columns: `bigint`, `uuid` or `ulid` (anything else throws `InvalidConfigurationException`). Read by the migrations, so set it before migrating. |
 | `min_rating` | `int` | `1` | `REVIEWS_MIN_RATING` | Lowest allowed rating value. |
 | `max_rating` | `int` | `5` | `REVIEWS_MAX_RATING` | Highest allowed rating value. |
 | `default_status` | `string` | `pending` | — | Status a review lands in when the moderator leaves it undecided (and auto-approve is off). |
 | `auto_approve` | `bool` | `false` | `REVIEWS_AUTO_APPROVE` | Approve new — and re-moderated, edited — reviews immediately, skipping the moderator. |
 | `reset_status_on_edit` | `bool` | `true` | `REVIEWS_RESET_STATUS_ON_EDIT` | On an edit to the rating/title/content, send an undecided review back to `default_status` (`false`: keep its status). The moderator re-runs either way. |
 | `one_per_author` | `bool` | `false` | `REVIEWS_ONE_PER_AUTHOR` | Block a second (non-deleted) review by the same author for the same subject; owner responses don't count. Checked under the author's row lock, so concurrent submissions can't both get in. |
-| `register_facade_alias` | `bool` | `true` | `REVIEWS_REGISTER_FACADE_ALIAS` | Register the global `Reviews` alias. |
+| `register_facade_alias` | `bool\|string` | `true` | `REVIEWS_REGISTER_FACADE_ALIAS` | Register the global `Reviews` alias; any other string is used as the alias name. |
 | `moderator` | `class-string` | `NullModerator::class` | — | `ReviewModerator` consulted on create and on edits to the rating/title/content; swap in `WordListModerator` or your own. |
 | `moderation.banned_words` | `list<string>` | `[]` | `REVIEWS_BANNED_WORDS` | Comma-separated words the `WordListModerator` rejects on. |
 | `cache_aggregates` | `bool` | `false` | `REVIEWS_CACHE_AGGREGATES` | Maintain cached `reviews_count` / `reviews_avg` on opted-in reviewables. |
@@ -203,6 +203,10 @@ return [
 | `photos.responsive_widths` | `list<int>` | `[320, 640, 1024]` | — | Responsive variant width ladder (`null` uses the media default). |
 | `photos.visibility` | `string` | `public` | `REVIEWS_PHOTOS_VISIBILITY` | `public` or `private`. |
 | `photos.warm_on_approval` | `bool` | `true` | `REVIEWS_PHOTOS_WARM_ON_APPROVAL` | Queue variant generation when a review is approved. |
+
+Every `bool` switch is read strictly: `true`/`1`/`on`/`yes` turn it on, `false`/`0`/`off`/`no`
+turn it off, and anything else (say `REVIEWS_PHOTOS_ENABLED=disabled`) throws
+`InvalidConfigurationException` instead of quietly reading as the default.
 
 The package works with zero configuration; every key above has a sensible default.
 

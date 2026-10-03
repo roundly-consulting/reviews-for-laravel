@@ -7,6 +7,7 @@ namespace RoundlyConsulting\Reviews\Support;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 use RoundlyConsulting\Reviews\DataTransferObjects\CreateReviewData;
 use RoundlyConsulting\Reviews\Exceptions\InvalidReviewException;
 use RoundlyConsulting\Reviews\Models\Review;
@@ -159,7 +160,7 @@ final class PendingReview
 
     private function guardPhotosEnabled(): void
     {
-        if (! (bool) config('reviews.photos.enabled', true)) {
+        if (! Config::boolean('reviews.photos.enabled', true)) {
             throw InvalidReviewException::photosDisabled();
         }
     }
