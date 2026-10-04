@@ -18,11 +18,11 @@ final class InvalidReviewException extends ReviewException
 
     public static function tooManyPhotos(int $max): self
     {
-        return new self("A review may have at most {$max} photo(s).");
+        return new self(trans_choice('reviews::messages.photos.too_many', $max, ['max' => $max]));
     }
 
     public static function photosDisabled(): self
     {
-        return new self('Review photos are disabled; enable reviews.photos.enabled to attach photos.');
+        return new self((string) trans('reviews::messages.photos.disabled'));
     }
 }

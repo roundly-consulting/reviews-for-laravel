@@ -6,6 +6,12 @@ All notable changes to `reviews-for-laravel` are documented in this file. The fo
 
 ## Unreleased
 
+### Fixed
+
+- The `InvalidReviewException::tooManyPhotos()` and `photosDisabled()` messages are now translated
+  (`reviews::messages.photos.*`, English and Slovak), and the photo limit uses proper plural forms
+  instead of "photo(s)".
+
 ## 1.0.1 - 2026-10-04
 
 ### Changed
