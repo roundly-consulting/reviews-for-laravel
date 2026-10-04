@@ -32,6 +32,14 @@ it('builds a too-many-photos exception with the right plural', function (): void
         ->and(InvalidReviewException::tooManyPhotos(5)->getMessage())->toBe('Recenzia môže mať najviac 5 fotografií.');
 });
 
+it('renders a zero photo limit without stray whitespace', function (): void {
+    expect(InvalidReviewException::tooManyPhotos(0)->getMessage())->toBe('A review may have at most 0 photos.');
+
+    app()->setLocale('sk');
+
+    expect(InvalidReviewException::tooManyPhotos(0)->getMessage())->toBe('Recenzia môže mať najviac 0 fotografií.');
+});
+
 it('builds a photos-disabled exception in the current locale', function (): void {
     expect(InvalidReviewException::photosDisabled()->getMessage())
         ->toBe('Review photos are disabled; enable reviews.photos.enabled to attach photos.');

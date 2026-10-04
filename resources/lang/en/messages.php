@@ -12,7 +12,7 @@ return [
         'banned_word' => 'This review contains language that is not allowed.',
     ],
     'photos' => [
-        'too_many' => '{1} A review may have at most :max photo.|[2,*] A review may have at most :max photos.',
+        'too_many' => '{1} A review may have at most :max photo.|[0,*] A review may have at most :max photos.',
         'disabled' => 'Review photos are disabled; enable reviews.photos.enabled to attach photos.',
     ],
 ];

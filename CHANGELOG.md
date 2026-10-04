@@ -6,6 +6,10 @@ All notable changes to `reviews-for-laravel` are documented in this file. The fo
 
 ## Unreleased
 
+### Fixed
+
+- The `messages.photos.too_many` plural line also covers a count of 0, so it never renders with a leading space.
+
 ## 1.0.2 - 2026-10-04
 
 ### Fixed

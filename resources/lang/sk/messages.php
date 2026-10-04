@@ -12,7 +12,7 @@ return [
         'banned_word' => 'Táto recenzia obsahuje nepovolené výrazy.',
     ],
     'photos' => [
-        'too_many' => '{1} Recenzia môže mať najviac :max fotografiu.|[2,4] Recenzia môže mať najviac :max fotografie.|[5,*] Recenzia môže mať najviac :max fotografií.',
+        'too_many' => '{1} Recenzia môže mať najviac :max fotografiu.|[2,4] Recenzia môže mať najviac :max fotografie.|[0,*] Recenzia môže mať najviac :max fotografií.',
         'disabled' => 'Fotografie v recenziách sú vypnuté; ak ich chcete pripájať, zapnite reviews.photos.enabled.',
     ],
 ];
