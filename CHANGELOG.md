@@ -6,6 +6,8 @@ All notable changes to `reviews-for-laravel` are documented in this file. The fo
 
 ## Unreleased
 
+## 1.0.2 - 2026-10-04
+
 ### Fixed
 
 - The `InvalidReviewException::tooManyPhotos()` and `photosDisabled()` messages are now translated
