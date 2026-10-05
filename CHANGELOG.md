@@ -6,6 +6,12 @@ All notable changes to `reviews-for-laravel` are documented in this file. The fo
 
 ## Unreleased
 
+## 1.0.3 - 2026-10-05
+
+### Changed
+
+- Documentation: the README hero image uses an absolute URL, so it also renders on Packagist and other sites.
+
 ### Fixed
 
 - The `messages.photos.too_many` plural line also covers a count of 0, so it never renders with a leading space.
