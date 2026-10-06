@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use RoundlyConsulting\MediaLibrary\Models\Media;
 use RoundlyConsulting\MediaLibrary\Support\MediaModel;
 use RoundlyConsulting\PackageToolkit\Support\Config;
+use RoundlyConsulting\PackageToolkit\Support\RawExpression;
 use RoundlyConsulting\Reviews\DataTransferObjects\RatingSummary;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\ReviewsManager;
@@ -110,6 +111,11 @@ final readonly class ReviewableScope
      * The media rows in the photos bucket owned by this subject's approved, top-level reviews,
      * or null when photos are disabled.
      *
+     * The review keys stay in the database as a subquery: binding one placeholder per approved
+     * review broke past the driver's limit (32 766 on SQLite, 65 535 on PostgreSQL and MySQL).
+     * `media.model_id` is a string morph, so the key is cast to a string to compare. Only when
+     * the configured models live on different connections are the keys read first.
+     *
      * @return Builder<Media>|null
      */
     private function photos(): ?Builder
@@ -119,11 +125,20 @@ final readonly class ReviewableScope
         }
 
         $review = ReviewModel::new();
+        $approved = $this->approved();
 
-        return MediaModel::query()
+        $media = MediaModel::query()
             ->where('bucket_name', ReviewsConfig::photoBucket())
-            ->where('model_type', $review->getMorphClass())
-            ->whereIn('model_id', $this->approved()->pluck($review->getKeyName()));
+            ->where('model_type', $review->getMorphClass());
+
+        if ($media->getModel()->getConnection() !== $review->getConnection()) {
+            return $media->whereIn('model_id', $approved->pluck($review->getKeyName()));
+        }
+
+        $key = $approved->getQuery()->getGrammar()->wrap($review->getQualifiedKeyName());
+        $string = in_array($review->getConnection()->getDriverName(), ['mysql', 'mariadb'], true) ? 'char' : 'varchar';
+
+        return $media->whereIn('model_id', $approved->select(new RawExpression("cast({$key} as {$string})")));
     }
 
     /** @return Builder<Review> */
