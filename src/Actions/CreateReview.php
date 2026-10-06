@@ -21,14 +21,13 @@ final readonly class CreateReview
 {
     public function __construct(
         private ValidatesRating $validateRating,
+        private ValidatesReviewContent $validateContent,
         private ModerateReview $moderate,
     ) {}
 
     public function execute(CreateReviewData $data): Review
     {
-        if ($data->rating === null && ($data->content === null || $data->content === '')) {
-            throw InvalidReviewException::empty();
-        }
+        $this->validateContent->execute($data->rating, $data->content);
 
         $this->validateRating->execute($data->rating);
 

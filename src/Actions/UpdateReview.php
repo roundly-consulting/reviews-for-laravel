@@ -30,6 +30,7 @@ final readonly class UpdateReview
 {
     public function __construct(
         private ValidatesRating $validateRating,
+        private ValidatesReviewContent $validateContent,
         private ModerateReview $moderate,
     ) {}
 
@@ -57,6 +58,9 @@ final readonly class UpdateReview
         if ($data->verified !== null) {
             $review->verified = $data->verified;
         }
+
+        // Update cannot clear a rating (null = unchanged), so only new content can empty a review.
+        $this->validateContent->execute($review->rating, $review->content);
 
         $outcome = $this->remoderate($review);
 
