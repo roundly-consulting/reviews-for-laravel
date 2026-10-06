@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Reviews\Actions;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
+use RoundlyConsulting\MediaLibrary\Support\MediaModel;
 use RoundlyConsulting\PackageToolkit\Support\Config;
 use RoundlyConsulting\Reviews\DataTransferObjects\CreateReviewData;
 use RoundlyConsulting\Reviews\Events\ReviewApproved;
@@ -74,9 +74,12 @@ final readonly class CreateReview
      *
      * With `one_per_author` on, the same transaction first takes the author's row lock and
      * re-checks for a duplicate, so one author's concurrent submissions (a double-click, a retry)
-     * serialize and the second one's lookup sees the first one's committed review. An author on
-     * another connection is locked in a transaction of its own around the review one. (SQLite has
+     * serialize and the second one's lookup sees the first one's committed review. (SQLite has
      * no row locks; it serializes writers instead.)
+     *
+     * The transaction runs on the review model's own connection. media-library's connection (when
+     * photos are attached) and the author's (when it is locked) get a transaction of their own
+     * around it when they differ — still one commit per connection, not a distributed one.
      */
     private function persist(Review $review, CreateReviewData $data): void
     {
@@ -93,15 +96,29 @@ final readonly class CreateReview
             $this->attachPhotos($review, $data->photos);
         };
 
-        $authors = $data->author->getConnection();
+        $connections = [$review->getConnection()];
 
-        if ($onePerAuthor && $authors !== DB::connection()) {
-            $authors->transaction(static fn () => DB::transaction($write));
-
-            return;
+        if ($data->photos !== []) {
+            $connections[] = MediaModel::new()->getConnection();
         }
 
-        DB::transaction($write);
+        if ($onePerAuthor) {
+            $connections[] = $data->author->getConnection();
+        }
+
+        $run = $write;
+        $wrapped = [];
+
+        foreach ($connections as $connection) {
+            if (in_array($connection, $wrapped, true)) {
+                continue;
+            }
+
+            $wrapped[] = $connection;
+            $run = static fn () => $connection->transaction($run);
+        }
+
+        $run();
     }
 
     /** Take the author's row lock for the rest of the enclosing transaction. */
