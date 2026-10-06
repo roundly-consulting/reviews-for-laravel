@@ -45,12 +45,23 @@ final readonly class RecountReviewVotes
         });
     }
 
+    /**
+     * The tallies are counted with **locking** reads: inside a host's enclosing REPEATABLE READ
+     * transaction (MySQL's default) a plain count answers from the snapshot fixed before the review
+     * lock was granted, and misses the vote that lock just waited for. PostgreSQL refuses a lock
+     * clause beside an aggregate, so the rows are locked in a derived table and counted around it.
+     */
     private function recount(Review $review): void
     {
-        $votes = static fn (bool $helpful): int => ReviewVoteModel::query()
-            ->where('review_id', $review->getKey())
-            ->where('helpful', $helpful)
-            ->count();
+        $votes = static function (bool $helpful) use ($review): int {
+            $locked = ReviewVoteModel::query()
+                ->where('review_id', $review->getKey())
+                ->where('helpful', $helpful)
+                ->select('id')
+                ->sharedLock();
+
+            return $locked->getQuery()->newQuery()->fromSub($locked, 'locked_votes')->count();
+        };
 
         $tallies = [
             'helpful_count' => $votes(true),

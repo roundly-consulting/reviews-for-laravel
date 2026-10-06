@@ -88,7 +88,7 @@ final readonly class CreateReview
         $write = function () use ($review, $data, $onePerAuthor): void {
             if ($onePerAuthor) {
                 $this->lockAuthor($data->author);
-                $this->guardAgainstDuplicate($data);
+                $this->guardAgainstDuplicate($data, locking: true);
             }
 
             $review->save();
@@ -182,18 +182,26 @@ final readonly class CreateReview
         return Config::boolean('reviews.one_per_author');
     }
 
-    private function guardAgainstDuplicate(CreateReviewData $data): void
+    /**
+     * The re-check under the author's lock is a **locking** read: inside a host's enclosing
+     * REPEATABLE READ transaction (MySQL's default) a plain read answers from the snapshot fixed
+     * before the lock was granted, and misses the review the lock just waited for.
+     */
+    private function guardAgainstDuplicate(CreateReviewData $data, bool $locking = false): void
     {
         if (! $this->onePerAuthor()) {
             return;
         }
 
         // Reviews only: an owner response the author wrote on this subject is not a review of it.
-        $exists = $this->newReview()->newQuery()
+        $query = $this->newReview()->newQuery()
             ->topLevel()
             ->authoredBy($data->author)
-            ->for($data->reviewable)
-            ->exists();
+            ->for($data->reviewable);
+
+        $exists = $locking
+            ? $query->lockForUpdate()->value($query->getModel()->getKeyName()) !== null
+            : $query->exists();
 
         if ($exists) {
             throw InvalidReviewException::duplicate();

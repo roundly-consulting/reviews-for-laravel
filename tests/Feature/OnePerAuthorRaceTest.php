@@ -63,7 +63,9 @@ it('locks the author, then re-checks and inserts inside one transaction', functi
     $log = statementsDuring(fn () => Reviews::for($product)->by($author)->content('Mine')->create());
 
     $lock = firstStatement($log, fn (string $sql): bool => str_starts_with($sql, 'select') && str_contains($sql, ' entities '));
-    $recheck = array_key_last(array_filter($log, fn (array $entry): bool => str_starts_with($entry['sql'], 'select exists') && str_contains($entry['sql'], ' reviews ')));
+    // The re-check is a locking `select id` since the 2026-10-06 chat review (C-3); its lock clause
+    // is pinned in Regression/StaleSnapshotReadsTest.
+    $recheck = firstStatement($log, fn (string $sql): bool => str_starts_with($sql, 'select id from reviews '));
     $insert = firstStatement($log, fn (string $sql): bool => str_starts_with($sql, 'insert into reviews '));
 
     expect($lock)->toBeGreaterThanOrEqual(0)
