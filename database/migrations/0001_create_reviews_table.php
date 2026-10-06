@@ -6,6 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use RoundlyConsulting\PackageToolkit\Enums\KeyType;
+use RoundlyConsulting\Reviews\Support\ReviewModel;
 
 return new class extends Migration
 {
@@ -13,12 +14,19 @@ return new class extends Migration
     {
         $keyType = KeyType::fromConfig('reviews.key_type');
 
-        Schema::create('reviews', function (Blueprint $table) use ($keyType): void {
+        // The configured `reviews.model`'s table, like the votes foreign key in 0002: a host on its
+        // own table gets that table, not an unused `reviews`. A table that already exists is left
+        // alone — the host created it, or this file was republished over an earlier install.
+        if (Schema::hasTable(ReviewModel::table())) {
+            return;
+        }
+
+        Schema::create(ReviewModel::table(), function (Blueprint $table) use ($keyType): void {
             $table->id();
 
             // Self-referential parent for owner responses/replies: a response is
             // itself a review row tied to a parent review.
-            $table->foreignId('parent_id')->nullable()->constrained('reviews')->nullOnDelete();
+            $table->foreignId('parent_id')->nullable()->constrained(ReviewModel::table())->nullOnDelete();
 
             $table->morphKey('reviewable', $keyType, nullable: true);
             $table->morphKey('author', $keyType, nullable: true);
