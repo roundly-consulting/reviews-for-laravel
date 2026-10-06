@@ -16,6 +16,7 @@ use RoundlyConsulting\Reviews\Contracts\ReviewModerator;
 use RoundlyConsulting\Reviews\Enums\ReviewStatus;
 use RoundlyConsulting\Reviews\Events\ReviewApproved;
 use RoundlyConsulting\Reviews\Facades\Reviews as ReviewsFacade;
+use RoundlyConsulting\Reviews\Listeners\ForceDeleteReviewResponses;
 use RoundlyConsulting\Reviews\Listeners\PurgeReviewPhotos;
 use RoundlyConsulting\Reviews\Listeners\WarmReviewPhotoVariants;
 use RoundlyConsulting\Reviews\Models\Review;
@@ -88,6 +89,12 @@ final class ReviewsServiceProvider extends PackageServiceProvider
         if (Config::boolean('reviews.photos.enabled', true)) {
             Event::listen(ReviewApproved::class, WarmReviewPhotoVariants::class);
         }
+
+        // A force-deleted review takes its owner responses with it, through Eloquent, rather than
+        // leaving the database to orphan them as top-level reviews.
+        ReviewModel::class()::forceDeleting(static function (Review $review): void {
+            app(ForceDeleteReviewResponses::class)->handle($review);
+        });
 
         // Whatever the photos switch says: force-delete is the erasure path, and photos stored while
         // the feature was on must not outlive their review.
