@@ -43,14 +43,16 @@ it('keeps photos on soft-delete', function (): void {
         ->and(Media::query()->count())->toBe(1);
 });
 
-it('leaves media untouched on force-delete when photos are disabled', function (): void {
+// Flipped by the 2026-10-06 chat review (C-11): force-delete is the erasure path, so photos stored
+// while the feature was on are purged even after it is switched off.
+it('clears the photos bucket on force-delete even when photos are disabled', function (): void {
     $review = reviewWithPhoto();
 
     config()->set('reviews.photos.enabled', false);
 
     (new PurgeReviewPhotos)->handle($review);
 
-    expect(Media::query()->count())->toBe(1);
+    expect(Media::query()->count())->toBe(0);
 });
 
 it('keeps photos available after a restore', function (): void {

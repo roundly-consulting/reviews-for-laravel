@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use RoundlyConsulting\Reviews\Testing\ReviewExpectations;
+use RoundlyConsulting\Reviews\Tests\PhotosDisabledTestCase;
 use RoundlyConsulting\Reviews\Tests\SwappedModelTestCase;
 use RoundlyConsulting\Reviews\Tests\TestCase;
 
@@ -19,5 +20,8 @@ uses(TestCase::class)->in('ArchTest.php', __DIR__.'/Feature', __DIR__.'/Unit');
 // enforced (the base case sets `foreign_key_constraints`, which this package's other suite
 // never did).
 uses(SwappedModelTestCase::class)->in(__DIR__.'/SwappedModel');
+
+// Hosts that switch `reviews.photos.enabled` off do it in config, before the provider boots.
+uses(PhotosDisabledTestCase::class)->in(__DIR__.'/PhotosDisabled');
 
 ReviewExpectations::register();

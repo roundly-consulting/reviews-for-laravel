@@ -8,7 +8,6 @@ use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
 use RoundlyConsulting\Reviews\DataTransferObjects\UpdateReviewData;
 use RoundlyConsulting\Reviews\Events\ReviewApproved;
 use RoundlyConsulting\Reviews\Facades\Reviews;
-use RoundlyConsulting\Reviews\Listeners\PurgeReviewPhotos;
 use RoundlyConsulting\Reviews\Listeners\WarmReviewPhotoVariants;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\ReviewsServiceProvider;
@@ -90,7 +89,6 @@ it('throws on a switch typo instead of reading it as the default (strict config)
         Reviews::update($review, new UpdateReviewData(content: 'changed'));
     }],
     'photos.enabled' => ['reviews.photos.enabled', fn (): bool => Review::reviewPhotosEnabled()],
-    'photos.enabled (purge)' => ['reviews.photos.enabled', fn () => app(PurgeReviewPhotos::class)->handle(new Review)],
     'photos.warm_on_approval' => ['reviews.photos.warm_on_approval', fn () => (new WarmReviewPhotoVariants)->handle(new ReviewApproved(new Review))],
     'cache_aggregates (boot)' => ['reviews.cache_aggregates', function (): void {
         $provider = new ReviewsServiceProvider(app());

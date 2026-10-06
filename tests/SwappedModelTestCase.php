@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Reviews\Tests;
 
 use Illuminate\Support\ServiceProvider;
+use RoundlyConsulting\MediaLibrary\MediaLibraryServiceProvider;
 use RoundlyConsulting\Reviews\ReviewsServiceProvider;
 
 /**
@@ -24,15 +25,18 @@ use RoundlyConsulting\Reviews\ReviewsServiceProvider;
 abstract class SwappedModelTestCase extends TestCase
 {
     /**
-     * Media-library is deliberately absent, matching what this case has always registered:
-     * `reviews.photos.enabled` is off below, so the photo bucket never resolves and the
-     * provider is dead weight here.
+     * Media-library is registered even though `reviews.photos.enabled` is off below: its table is
+     * part of the documented install, and force-deleting a review purges its photos whatever the
+     * switch says (chat review C-11), so a force-delete here queries `media` like a host's does.
      *
      * @return list<class-string<ServiceProvider>>
      */
     protected function packageProviders(): array
     {
-        return [ReviewsServiceProvider::class];
+        return [
+            MediaLibraryServiceProvider::class,
+            ReviewsServiceProvider::class,
+        ];
     }
 
     /**
@@ -50,6 +54,7 @@ abstract class SwappedModelTestCase extends TestCase
     {
         return [
             __DIR__.'/database/host-migrations',
+            MediaLibraryServiceProvider::class,
             ReviewsServiceProvider::class,
             __DIR__.'/database/migrations',
         ];

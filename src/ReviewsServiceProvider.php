@@ -87,11 +87,13 @@ final class ReviewsServiceProvider extends PackageServiceProvider
 
         if (Config::boolean('reviews.photos.enabled', true)) {
             Event::listen(ReviewApproved::class, WarmReviewPhotoVariants::class);
-
-            ReviewModel::class()::forceDeleted(static function (Review $review): void {
-                app(PurgeReviewPhotos::class)->handle($review);
-            });
         }
+
+        // Whatever the photos switch says: force-delete is the erasure path, and photos stored while
+        // the feature was on must not outlive their review.
+        ReviewModel::class()::forceDeleted(static function (Review $review): void {
+            app(PurgeReviewPhotos::class)->handle($review);
+        });
     }
 
     /**
