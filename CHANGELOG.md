@@ -6,6 +6,51 @@ All notable changes to `reviews-for-laravel` are documented in this file. The fo
 
 ## Unreleased
 
+### Added
+
+- A publish-only migration, `cascade_review_responses_on_delete`, switches `parent_id` on the configured
+  reviews table to cascade on delete, so a review deleted in the database (bypassing Eloquent) takes its
+  owner responses with it. It works on installs that already ran `create_reviews_table` (MySQL, PostgreSQL
+  and SQLite, rows kept). Upgrading: `php artisan vendor:publish --tag="reviews-migrations"`, then
+  `php artisan migrate`.
+
+### Changed
+
+- `Reviews::update()` fires `ReviewVerified` (with the new state) when the update really changes the
+  `verified` flag, like `verify()` / `unverify()`; `Reviews::fake()` records it as verified / unverified.
+- Force-deleting a review purges its photos whatever `reviews.photos.enabled` says, so photos stored while
+  the feature was on no longer outlive their review once it is switched off.
+- `recountReviews()` writes only the two cached counter columns, like the vote tallies: it no longer
+  bumps the reviewable's `updated_at` or saves its other unsaved changes.
+
+### Fixed
+
+- Force-deleting a review force-deletes its owner responses (live and soft-deleted) through Eloquent,
+  instead of leaving them behind as top-level approved reviews that counted towards the subject.
+- The cached `reviews_count` / `reviews_avg` no longer lose a concurrent approved review: the recount
+  runs in a transaction under the subject's row lock and counts with locking reads, and inside a
+  transaction the subject is locked before the review row is written.
+- Inside a host transaction under REPEATABLE READ (MySQL's default), the `one_per_author` re-check and
+  the helpful / unhelpful tallies no longer miss a review or vote committed meanwhile: both are locking
+  reads now.
+- `WordListModerator` matches banned entries that contain a space or punctuation (`rip off`, `f*ck`) as
+  consecutive words; an entry with no word in it is ignored.
+- Creating a review with a `reviews.model` on its own connection runs the write and its photos in a
+  transaction on that connection (media-library's nested inside), so a refused photo no longer leaves the
+  review behind.
+- A review with no rating needs content that is more than whitespace, on create and after an update.
+- A freshly created review or response carries its column defaults in memory (pending, unverified, zero
+  tallies): `ReviewResource` no longer returns `null` tallies, and `unverify()` on a fresh response no
+  longer fires `ReviewVerified` (or throws under `Reviews::fake()`).
+- `Reviews::for($subject)->summary()`, `photoCount()` and `reviewsWithPhotos()` no longer fail on a
+  subject with more approved reviews than the database allows placeholders (32 766 on SQLite, 65 535 on
+  PostgreSQL and MySQL).
+- The review and vote factories build the configured `reviews.model` / `reviews.vote_model`, and a
+  factory vote's parent review lands in the table the votes foreign key points at.
+- The `create_reviews_table` migration creates the configured `reviews.model` table, with `parent_id`
+  referencing that same table, and leaves a table that already exists alone. Hosts that already ran it
+  keep their copy.
+
 ## 1.0.3 - 2026-10-05
 
 ### Changed
