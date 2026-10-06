@@ -22,6 +22,7 @@ All notable changes to `reviews-for-laravel` are documented in this file. The fo
   the feature was on no longer outlive their review once it is switched off.
 - `recountReviews()` writes only the two cached counter columns, like the vote tallies: it no longer
   bumps the reviewable's `updated_at` or saves its other unsaved changes.
+- Requires `roundly-consulting/media-library-for-laravel` `^1.1.1`.
 
 ### Fixed
 
@@ -50,6 +51,8 @@ All notable changes to `reviews-for-laravel` are documented in this file. The fo
 - The `create_reviews_table` migration creates the configured `reviews.model` table, with `parent_id`
   referencing that same table, and leaves a table that already exists alone. Hosts that already ran it
   keep their copy.
+- A refused later photo no longer leaves the earlier photos' files (originals and variants) on disk:
+  media-library 1.1.1 deletes the files an add wrote when the create transaction rolls back.
 
 ## 1.0.3 - 2026-10-05
 
