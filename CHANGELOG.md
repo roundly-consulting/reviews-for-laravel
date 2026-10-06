@@ -6,6 +6,8 @@ All notable changes to `reviews-for-laravel` are documented in this file. The fo
 
 ## Unreleased
 
+## 1.1.0 - 2026-10-06
+
 ### Added
 
 - A publish-only migration, `cascade_review_responses_on_delete`, switches `parent_id` on the configured
