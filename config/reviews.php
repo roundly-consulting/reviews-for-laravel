@@ -132,7 +132,8 @@ return [
     | reviews at their default status. Swap in WordListModerator (or your own)
     | to auto-approve/auto-reject. Banned words feed the bundled
     | WordListModerator and are matched case-insensitively as whole words, in
-    | any script (accented and non-Latin words included).
+    | any script (accented and non-Latin words included). An entry with a space
+    | or punctuation ("rip off", "f*ck") matches as a run of consecutive words.
     |
     */
 

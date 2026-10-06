@@ -16,6 +16,11 @@ use RoundlyConsulting\Reviews\Support\ReviewsConfig;
  * content contains any configured banned word (case-insensitive, whole-word).
  * Anything clean is left pending for the normal flow.
  *
+ * An entry is split into words exactly like the text, so a phrase or a punctuated
+ * entry (`rip off`, `f*ck`) matches as a run of consecutive words: `What a rip
+ * off` and `f*ck this` are rejected, `ripoff` and `trip offer` are not. An entry
+ * with no word in it (`***`) is dropped rather than matching everything.
+ *
  * Matching is Unicode-aware: a word is a run of letters (with their combining
  * marks), digits and underscores in any script, so `idiót` or `дурак` match as
  * whole words and an accented letter never splits a word in two. Text and
@@ -24,8 +29,12 @@ use RoundlyConsulting\Reviews\Support\ReviewsConfig;
  */
 final class WordListModerator implements ReviewModerator
 {
-    /** @var list<string> */
-    private array $bannedWords;
+    /**
+     * Each banned entry as the words it splits into.
+     *
+     * @var list<non-empty-list<string>>
+     */
+    private array $bannedPhrases = [];
 
     /**
      * @param  list<string>|null  $bannedWords  Defaults to config('reviews.moderation.banned_words').
@@ -36,15 +45,18 @@ final class WordListModerator implements ReviewModerator
             $bannedWords = ReviewsConfig::bannedWords();
         }
 
-        $this->bannedWords = array_values(array_map(
-            static fn (string $word): string => self::normalize(trim($word)),
-            array_filter($bannedWords, static fn (string $word): bool => trim($word) !== ''),
-        ));
+        foreach ($bannedWords as $entry) {
+            $words = self::words(self::normalize(trim($entry)));
+
+            if ($words !== []) {
+                $this->bannedPhrases[] = $words;
+            }
+        }
     }
 
     public function moderate(Review $review): ModerationOutcome
     {
-        if ($this->bannedWords === []) {
+        if ($this->bannedPhrases === []) {
             return ModerationOutcome::pending();
         }
 
@@ -54,10 +66,10 @@ final class WordListModerator implements ReviewModerator
             return ModerationOutcome::pending();
         }
 
-        $words = preg_split('/[^\p{L}\p{M}\p{N}_]+/u', $haystack, flags: PREG_SPLIT_NO_EMPTY) ?: [];
+        $words = self::words($haystack);
 
-        foreach ($this->bannedWords as $banned) {
-            if (in_array($banned, $words, true)) {
+        foreach ($this->bannedPhrases as $banned) {
+            if (self::containsPhrase($words, $banned)) {
                 return ModerationOutcome::reject(
                     (string) trans('reviews::messages.review.banned_word'),
                 );
@@ -65,6 +77,39 @@ final class WordListModerator implements ReviewModerator
         }
 
         return ModerationOutcome::pending();
+    }
+
+    /**
+     * The words of a normalised text: runs of letters (with their marks), digits and underscores.
+     *
+     * @return list<string>
+     */
+    private static function words(string $text): array
+    {
+        return preg_split('/[^\p{L}\p{M}\p{N}_]+/u', $text, flags: PREG_SPLIT_NO_EMPTY) ?: [];
+    }
+
+    /**
+     * Whether `$phrase` occurs in `$words` as a run of consecutive words.
+     *
+     * @param  list<string>  $words
+     * @param  non-empty-list<string>  $phrase
+     */
+    private static function containsPhrase(array $words, array $phrase): bool
+    {
+        $length = count($phrase);
+
+        if ($length === 1) {
+            return in_array($phrase[0], $words, true);
+        }
+
+        for ($start = 0, $last = count($words) - $length; $start <= $last; $start++) {
+            if (array_slice($words, $start, $length) === $phrase) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
