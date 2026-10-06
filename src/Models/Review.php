@@ -53,6 +53,19 @@ class Review extends Model implements HasMedia
 
     protected $guarded = [];
 
+    /**
+     * The migration's column defaults, mirrored in memory: Eloquent never reads them back after
+     * an insert, so without these a just-created review or response carries nulls until refreshed.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'status' => ReviewStatus::Pending->value,
+        'verified' => false,
+        'helpful_count' => 0,
+        'unhelpful_count' => 0,
+    ];
+
     /** @return array<string, string> */
     protected function casts(): array
     {

@@ -16,7 +16,7 @@ final readonly class MarkReviewVerified
 {
     public function execute(Review $review, bool $verified = true): Review
     {
-        if ($review->verified === $verified) {
+        if ((bool) $review->verified === $verified) {
             return $review;
         }
 

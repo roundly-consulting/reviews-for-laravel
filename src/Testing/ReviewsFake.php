@@ -91,14 +91,14 @@ final class ReviewsFake extends ReviewsManager
 
     public function verify(Review $review): Review
     {
-        $changes = ! $review->verified;
+        $changes = ! (bool) $review->verified;
 
         return $this->recordIf($changes, 'verified', parent::verify($review));
     }
 
     public function unverify(Review $review): Review
     {
-        $changes = $review->verified;
+        $changes = (bool) $review->verified;
 
         return $this->recordIf($changes, 'unverified', parent::unverify($review));
     }
