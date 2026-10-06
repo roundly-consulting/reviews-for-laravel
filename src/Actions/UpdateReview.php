@@ -10,6 +10,7 @@ use RoundlyConsulting\Reviews\DataTransferObjects\UpdateReviewData;
 use RoundlyConsulting\Reviews\Events\ReviewApproved;
 use RoundlyConsulting\Reviews\Events\ReviewRejected;
 use RoundlyConsulting\Reviews\Events\ReviewUpdated;
+use RoundlyConsulting\Reviews\Events\ReviewVerified;
 use RoundlyConsulting\Reviews\Models\Review;
 
 /**
@@ -21,6 +22,9 @@ use RoundlyConsulting\Reviews\Models\Review;
  * review to `reviews.default_status` (pending by default) for a human to look at again; with it
  * off, an undecided outcome keeps the current status — but the moderator still runs, so a banned
  * word cannot be edited into a live review either way.
+ *
+ * A change of the `verified` flag fires {@see ReviewVerified} with the new state, as verify() /
+ * unverify() do; an update that leaves the flag as it was fires nothing for it.
  *
  * Two kinds of review are never re-moderated: a **rejected** review stays rejected (with its
  * reason) until someone approves it explicitly, and an owner **response** stays approved — it
@@ -64,9 +68,18 @@ final readonly class UpdateReview
 
         $outcome = $this->remoderate($review);
 
+        // Read before the save: wasChanged() would still report the previous save's changes when
+        // this one writes nothing.
+        $verifiedChanged = $review->isDirty('verified');
+
         $review->save();
 
         ReviewUpdated::dispatch($review);
+
+        // A real change of the flag is announced like verify() / unverify() would announce it.
+        if ($verifiedChanged) {
+            ReviewVerified::dispatch($review, (bool) $review->verified);
+        }
 
         if ($outcome !== null && $review->status !== $before) {
             if ($review->isApproved()) {

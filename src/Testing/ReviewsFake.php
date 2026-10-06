@@ -54,9 +54,18 @@ final class ReviewsFake extends ReviewsManager
         return $this->recordIf($changes, 'rejected', parent::reject($review, $reason));
     }
 
+    /** A real change of the `verified` flag is also recorded as verified / unverified. */
     public function update(Review $review, UpdateReviewData $data): Review
     {
-        return $this->record('updated', parent::update($review, $data));
+        $before = (bool) $review->getOriginal('verified');
+
+        $updated = $this->record('updated', parent::update($review, $data));
+
+        if ((bool) $updated->verified !== $before) {
+            $this->record($updated->verified ? 'verified' : 'unverified', $updated);
+        }
+
+        return $updated;
     }
 
     public function delete(Review $review): void
