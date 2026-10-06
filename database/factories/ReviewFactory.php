@@ -9,12 +9,24 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Date;
 use RoundlyConsulting\Reviews\Enums\ReviewStatus;
 use RoundlyConsulting\Reviews\Models\Review;
+use RoundlyConsulting\Reviews\Support\ReviewModel;
 use RoundlyConsulting\Reviews\Support\ReviewsConfig;
 
 /** @extends Factory<Review> */
 final class ReviewFactory extends Factory
 {
     protected $model = Review::class;
+
+    /**
+     * The configured `reviews.model`, so a host that swaps the model (on its own table) gets its
+     * own rows from `Review::factory()` and `TenantReview::factory()` alike.
+     *
+     * @return class-string<Review>
+     */
+    public function modelName(): string
+    {
+        return ReviewModel::class();
+    }
 
     /** @return array<string, mixed> */
     public function definition(): array

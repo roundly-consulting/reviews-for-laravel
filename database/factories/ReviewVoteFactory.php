@@ -8,17 +8,31 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Models\ReviewVote;
+use RoundlyConsulting\Reviews\Support\ReviewModel;
+use RoundlyConsulting\Reviews\Support\ReviewVoteModel;
 
 /** @extends Factory<ReviewVote> */
 final class ReviewVoteFactory extends Factory
 {
     protected $model = ReviewVote::class;
 
+    /**
+     * The configured `reviews.vote_model`.
+     *
+     * @return class-string<ReviewVote>
+     */
+    public function modelName(): string
+    {
+        return ReviewVoteModel::class();
+    }
+
     /** @return array<string, mixed> */
     public function definition(): array
     {
         return [
-            'review_id' => Review::factory(),
+            // The configured review model's factory, so the parent lands in the table the votes
+            // foreign key points at.
+            'review_id' => ReviewModel::class()::factory(),
             'helpful' => true,
         ];
     }
