@@ -31,12 +31,13 @@ use RoundlyConsulting\Testing\Database\DriverMatrix;
 $migrations = __DIR__.'/../../database/migrations';
 
 /**
- * The non-literal `->constrained()` argument, mapped to the table it resolves to under the
- * packaged default config. `0002_create_review_votes_table` resolves its parent through
- * `ReviewModel::table()` so a swapped `reviews.model` is honoured (the fix in 0a23fa8); the
- * parse still has to know what that lands on. The resolver **never guesses on a non-literal**
- * — an unmapped expression FAILS rather than silently dropping the edge, which is what keeps
- * `foreignKeys: 2` honest instead of a number that passes over an empty parse.
+ * The non-literal table argument, mapped to the table it resolves to under the packaged
+ * default config. Every migration resolves the reviews table through `ReviewModel::table()` so
+ * a swapped `reviews.model` is honoured (0002's votes key since 0a23fa8; 0001's table and
+ * `parent_id`, and 0003's cascade, since the 2026-10-06 chat review); the parse still has to
+ * know what that lands on. The resolver **never guesses on a non-literal** — an unmapped
+ * expression FAILS rather than silently dropping the edge, which is what keeps
+ * `foreignKeys: 3` honest instead of a number that passes over an empty parse.
  */
 $tableResolvers = [
     'ReviewModel::table()' => 'reviews',
@@ -48,14 +49,15 @@ $tableResolvers = [
  * Publish order IS run order (directory sort), so a migration that constrains onto a table
  * an earlier one has not created yet is uninstallable in a host.
  *
- * `foreignKeys: 2` pins the edge count: `reviews.parent_id` → reviews (the self-referential
- * owner-response link) and `review_votes.review_id` → the configured review table. The
+ * `foreignKeys: 3` pins the edge count: `reviews.parent_id` → reviews (the self-referential
+ * owner-response link), `review_votes.review_id` → the configured review table, and the same
+ * `parent_id` key re-declared to cascade by `0003_cascade_review_responses_on_delete`. The
  * `reviewable`, `author` and `voter` columns are deliberately unconstrained morphs — a
  * subject or an author can live in any table.
  */
 it('has a runnable migration order', function () use ($migrations, $tableResolvers): void {
     expect($migrations)->toHaveRunnableMigrationOrder(
-        foreignKeys: 2,
+        foreignKeys: 3,
         tableResolvers: $tableResolvers,
     );
 });
@@ -63,7 +65,7 @@ it('has a runnable migration order', function () use ($migrations, $tableResolve
 /**
  * P — the publish-only guards. The fleet publishes migrations timestamped rather than
  * auto-loading them; doing both runs both copies and dies on a duplicate table (bug #5, on
- * three packages). `count: 2` pins the file count so neither check can pass over an empty or
+ * three packages). `count: 3` pins the file count so neither check can pass over an empty or
  * relocated directory.
  *
  * The bespoke publish cases in tests/Feature/Provider/PublishOnlyMigrationsTest.php are
@@ -75,17 +77,17 @@ it('never auto-loads its migrations — the host publishes them', function (): v
 });
 
 it('publishes every migration timestamp-injected into the host', function (): void {
-    expect(ReviewsServiceProvider::class)->toPublishMigrationsTimestamped('reviews-migrations', 2);
+    expect(ReviewsServiceProvider::class)->toPublishMigrationsTimestamped('reviews-migrations', 3);
 });
 
 /**
  * R — the real-engine proof. The deleted local version ran the published files against a
  * throwaway SQLite database, the one engine that cannot fail this class of check.
- * `migrations: 2` pins the count, and the expectation additionally fails a set that "applies
+ * `migrations: 3` pins the count, and the expectation additionally fails a set that "applies
  * cleanly" while creating no tables — an empty `up()` otherwise passes and proves nothing.
  */
 it('applies its migrations on postgres', function () use ($migrations): void {
-    expect($migrations)->toApplyOnConnection('pgsql', migrations: 2);
+    expect($migrations)->toApplyOnConnection('pgsql', migrations: 3);
 })->skip(fn (): bool => ! test()->connectionAvailable('pgsql'), 'no postgres connection available');
 
 /**
