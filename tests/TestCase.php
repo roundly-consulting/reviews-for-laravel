@@ -94,4 +94,13 @@ abstract class TestCase extends PackageTestCase
      * case sets the pragma `true` for every suite, so both of this package's real FK edges
      * are now enforced on the ordinary sqlite leg.
      */
+
+    /**
+     * Migrate once per worker and schema signature, then empty the tables after each test —
+     * still no transaction. The migrations read only config, which the signature covers.
+     */
+    protected function keepsMigratedSchema(): bool
+    {
+        return true;
+    }
 }
