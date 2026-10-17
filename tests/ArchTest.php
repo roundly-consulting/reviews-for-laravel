@@ -71,6 +71,8 @@ ArchPresets::modelsResolveThroughSeam(__DIR__.'/../src', 'Support', [
     'reviews.vote_model',
 ]);
 
+ArchPresets::factoriesResolveThroughSeam(__DIR__.'/../database/factories', __DIR__.'/../src', 'Support');
+
 /**
  * The morph-key seam, guarded. Reviews' `reviewable` and `author` columns (reviews table)
  * and `voter` (review_votes) migrated off raw `$table->morphs()` onto `morphKey($name,
