@@ -6,6 +6,8 @@ All notable changes to `reviews-for-laravel` are documented in this file. The fo
 
 ## Unreleased
 
+## 1.2.0 - 2026-10-18
+
 ### Added
 
 - `ReviewAuthorResource` and `ReviewableResource`: `ReviewResource` renders a review's `author` and
@@ -28,6 +30,8 @@ All notable changes to `reviews-for-laravel` are documented in this file. The fo
   in one query per morph type. A single `ReviewResource` does the same for its loaded responses. When you
   render reviews yourself (`new ReviewResource($review)`, `ReviewResource::collection()`), eager-load
   `author` and `reviewable` to avoid a query per review.
+- Maintenance: dev: testing `^1.6`.
+- Maintenance: CI runs the PostgreSQL and MySQL test legs on tmpfs.
 
 ## 1.1.1 - 2026-10-11
 
