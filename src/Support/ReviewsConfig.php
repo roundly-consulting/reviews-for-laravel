@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Reviews\Support;
 
+use Illuminate\Http\Resources\Json\JsonResource;
+use ReflectionClass;
 use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
 use RoundlyConsulting\PackageToolkit\Support\Config;
+use RoundlyConsulting\Reviews\Http\Resources\ReviewableResource;
+use RoundlyConsulting\Reviews\Http\Resources\ReviewAuthorResource;
 
 /**
  * Strict readers for the package's non-boolean settings.
@@ -133,6 +137,49 @@ final class ReviewsConfig
     public static function temporaryUrlLifetime(): int
     {
         return Config::integer('media.temporary_url_default_lifetime', 5, 1);
+    }
+
+    /**
+     * The resource a review's author renders through.
+     *
+     * @return class-string<JsonResource>
+     */
+    public static function authorResource(): string
+    {
+        return self::resource('reviews.resources.author', ReviewAuthorResource::class);
+    }
+
+    /**
+     * The resource a review's subject renders through.
+     *
+     * @return class-string<JsonResource>
+     */
+    public static function reviewableResource(): string
+    {
+        return self::resource('reviews.resources.reviewable', ReviewableResource::class);
+    }
+
+    /**
+     * A concrete JsonResource subclass, or the default when not set. JsonResource itself is
+     * refused (it would render the whole model, morph columns and all), and so is an abstract
+     * subclass, which could never be built.
+     *
+     * @param  class-string<JsonResource>  $default
+     * @return class-string<JsonResource>
+     */
+    private static function resource(string $key, string $default): string
+    {
+        $value = self::unlessBlank(config($key));
+
+        if ($value === null) {
+            return $default;
+        }
+
+        if (! is_string($value) || ! is_subclass_of($value, JsonResource::class) || ! (new ReflectionClass($value))->isInstantiable()) {
+            throw InvalidConfigurationException::notAnImplementation($key, JsonResource::class, $value);
+        }
+
+        return $value;
     }
 
     private static function string(string $key, string $default): string

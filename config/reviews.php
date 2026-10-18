@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use RoundlyConsulting\Reviews\Enums\ReviewStatus;
+use RoundlyConsulting\Reviews\Http\Resources\ReviewableResource;
+use RoundlyConsulting\Reviews\Http\Resources\ReviewAuthorResource;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\Models\ReviewVote;
 use RoundlyConsulting\Reviews\Moderation\NullModerator;
@@ -160,6 +162,34 @@ return [
     */
 
     'cache_aggregates' => env('REVIEWS_CACHE_AGGREGATES', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | API Resources
+    |--------------------------------------------------------------------------
+    |
+    | The JSON resources ReviewResource renders a review's "author" and
+    | "reviewable" through. Each one receives the related model and, by
+    | default, renders only its id and type — the model's class basename
+    | ("User"), never its class name. Swap either for your own JsonResource
+    | subclass to add what your API needs (a name, an avatar, a title). A
+    | related row that no longer exists renders null. A value that is not set
+    | (null, or blank) takes the default; anything that is not a concrete
+    | JsonResource subclass throws an InvalidConfigurationException.
+    |
+    | Rendering many reviews: ReviewCollection eager-loads both relations for
+    | you; with a single ReviewResource or ReviewResource::collection(), load
+    | "author" and "reviewable" yourself to avoid a query per review.
+    |
+    */
+
+    'resources' => [
+
+        'author' => ReviewAuthorResource::class,
+
+        'reviewable' => ReviewableResource::class,
+
+    ],
 
     /*
     |--------------------------------------------------------------------------

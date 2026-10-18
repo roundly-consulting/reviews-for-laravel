@@ -13,6 +13,8 @@ use RoundlyConsulting\Reviews\Http\Resources\ReviewResource;
 use RoundlyConsulting\Reviews\Models\Review;
 use RoundlyConsulting\Reviews\ReviewsServiceProvider;
 use RoundlyConsulting\Reviews\Tests\Entity;
+use RoundlyConsulting\Reviews\Tests\Fixtures\AuthorCardResource;
+use RoundlyConsulting\Reviews\Tests\Fixtures\ReviewedItemResource;
 
 /*
  * `reviews-resources` used to copy the package's own classes into app/Http/Resources/Reviews,
@@ -78,4 +80,23 @@ it('renders exactly what the package resource renders until the host edits it', 
         ->and($json(new PublishedReviewResource($review))['data']['responses'])->toHaveCount(1)
         ->and($collection->collects)->toBe(PublishedReviewResource::class)
         ->and($json($collection))->toBe($json(new ReviewCollection(collect([$review]))));
+});
+
+it('renders author and reviewable through the configured resources, like the package resource', function (): void {
+    foreach (publishedResources() as $file) {
+        require_once $file['from'];
+    }
+
+    config()->set('reviews.resources.author', AuthorCardResource::class);
+    config()->set('reviews.resources.reviewable', ReviewedItemResource::class);
+
+    $review = Reviews::for(Entity::create())->by(Entity::create())->rating(4)->content('Fine')->approved()->create();
+    $request = Request::create('/');
+
+    $json = fn (JsonResource $resource): mixed => json_decode((string) $resource->toResponse($request)->getContent(), true);
+    $published = $json(new PublishedReviewResource($review));
+
+    expect($published)->toBe($json(new ReviewResource($review)))
+        ->and($published['data']['author'])->toBe(['id' => $review->author_id, 'name' => 'Member #'.$review->author_id, 'avatar' => null])
+        ->and($published['data']['reviewable'])->toBe(['id' => $review->reviewable_id, 'title' => 'Item #'.$review->reviewable_id]);
 });

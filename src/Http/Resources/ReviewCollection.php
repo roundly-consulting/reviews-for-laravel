@@ -4,9 +4,44 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Reviews\Http\Resources;
 
+use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Http\Resources\Json\ResourceCollection;
+use JsonSerializable;
+use RoundlyConsulting\Reviews\Models\Review;
 
 final class ReviewCollection extends ResourceCollection
 {
     public $collects = ReviewResource::class;
+
+    /**
+     * Loads every review's author and subject — and those of the owner responses already loaded
+     * on them — in one query per morph type before rendering, instead of one per review.
+     *
+     * @return array<array-key, mixed>|Arrayable<array-key, mixed>|JsonSerializable
+     */
+    public function toArray(Request $request): array|Arrayable|JsonSerializable
+    {
+        $this->loadReferences();
+
+        return parent::toArray($request);
+    }
+
+    private function loadReferences(): void
+    {
+        $reviews = new EloquentCollection;
+
+        foreach ($this->collection as $item) {
+            $review = $item instanceof JsonResource ? $item->resource : $item;
+
+            // Responses ride along only when already loaded: loading them here would add them to the output.
+            if ($review instanceof Review) {
+                $reviews->push($review, ...($review->relationLoaded('responses') ? $review->responses : []));
+            }
+        }
+
+        $reviews->loadMissing(['author', 'reviewable']);
+    }
 }

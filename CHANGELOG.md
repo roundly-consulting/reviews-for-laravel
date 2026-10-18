@@ -6,6 +6,29 @@ All notable changes to `reviews-for-laravel` are documented in this file. The fo
 
 ## Unreleased
 
+### Added
+
+- `ReviewAuthorResource` and `ReviewableResource`: `ReviewResource` renders a review's `author` and
+  `reviewable` through them. Each wraps the related model and renders `{id, type}` by default.
+- Config keys `reviews.resources.author` and `reviews.resources.reviewable` (defaults: the two classes
+  above). Swap either for your own `JsonResource` subclass to add a name, an avatar or a title. A blank
+  value takes the default. Anything that is not a concrete `JsonResource` subclass throws
+  `InvalidConfigurationException` naming the key.
+- `ReviewResource::authorOf($review, $request)` / `reviewableOf($review, $request)` return those two
+  rendered references. The published `reviews-resources` stubs use them.
+
+### Changed
+
+- `author.type` and `reviewable.type` in `ReviewResource` (and the published stub) are now the related
+  model's class basename (`User`), never its class name (`App\Models\User`). That holds with or without a
+  morph map. To change the shape, swap the resource through `reviews.resources.*`.
+- `author` / `reviewable` are built from the related models: a related row that no longer exists renders
+  `null`. Both keys are always present.
+- `ReviewCollection` loads the authors and subjects of its reviews, and of their already-loaded responses,
+  in one query per morph type. A single `ReviewResource` does the same for its loaded responses. When you
+  render reviews yourself (`new ReviewResource($review)`, `ReviewResource::collection()`), eager-load
+  `author` and `reviewable` to avoid a query per review.
+
 ## 1.1.1 - 2026-10-11
 
 ### Changed

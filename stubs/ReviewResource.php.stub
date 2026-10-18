@@ -6,12 +6,18 @@ namespace App\Http\Resources\Reviews;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use RoundlyConsulting\Reviews\Http\Resources\ReviewResource as PackageReviewResource;
 use RoundlyConsulting\Reviews\Models\Review;
 
 /**
  * Your copy of the reviews JSON shape, published by `vendor:publish --tag=reviews-resources`.
  * It starts out rendering exactly what the package's own ReviewResource renders; it is yours to
  * edit. Use this class (not the package one) in your controllers.
+ *
+ * `author` and `reviewable` render through the `reviews.resources.author` /
+ * `reviews.resources.reviewable` resources (id + class basename by default), or `null` once the
+ * related row is gone: swap those config keys, or render your own resources here instead.
+ * Eager-load `author` and `reviewable` when rendering many reviews.
  *
  * @mixin Review
  */
@@ -36,15 +42,13 @@ class ReviewResource extends JsonResource
             'helpful_count' => $review->helpful_count,
             'unhelpful_count' => $review->unhelpful_count,
             'helpful_score' => $review->helpfulScore(),
-            'author' => [
-                'type' => $review->author_type,
-                'id' => $review->author_id,
-            ],
-            'reviewable' => [
-                'type' => $review->reviewable_type,
-                'id' => $review->reviewable_id,
-            ],
-            'responses' => static::collection($this->whenLoaded('responses')),
+            'author' => PackageReviewResource::authorOf($review, $request),
+            'reviewable' => PackageReviewResource::reviewableOf($review, $request),
+            // One query per morph type for the responses' authors and subjects, not one per response.
+            'responses' => static::collection($this->whenLoaded(
+                'responses',
+                static fn (): mixed => $review->responses->loadMissing(['author', 'reviewable']),
+            )),
             'photos' => $this->photos($review),
             'created_at' => $review->created_at?->toIso8601String(),
             'updated_at' => $review->updated_at?->toIso8601String(),
